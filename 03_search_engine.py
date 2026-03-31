@@ -68,8 +68,8 @@ def get_embedding(text: str) -> list[float]:
 def search_structured(
     ateco_codici: list[str] | None = None,
     regione: str | None = None,
-    min_ricavi: float | None = None,
-    max_ricavi: float | None = None,
+    min_ricavi: int | None = None,
+    max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
     limit: int = 20,
 ) -> list[dict]:
@@ -121,8 +121,8 @@ def search(
     query_text: str | None = None,
     ateco_codici: list[str] | None = None,
     regione: str | None = None,
-    min_ricavi: float | None = None,
-    max_ricavi: float | None = None,
+    min_ricavi: int | None = None,
+    max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
     limit: int = 15,
     explain: bool = False,
