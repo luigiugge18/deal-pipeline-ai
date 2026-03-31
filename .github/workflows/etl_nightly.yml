@@ -1,0 +1,130 @@
+# =============================================================================
+# Deal Pipeline AI — Scheduler ETL Notturno
+# =============================================================================
+# File: .github/workflows/etl_nightly.yml
+#
+# Esegue la pipeline ETL ogni notte alle 02:00 (CET = 01:00 UTC).
+# Può essere avviato manualmente da GitHub Actions → "Run workflow".
+#
+# Setup:
+#   1. Copia questo file in .github/workflows/etl_nightly.yml nel repo
+#   2. In GitHub: Settings → Secrets and variables → Actions → New secret
+#      Aggiungere tutti i secret elencati in "env" qui sotto
+# =============================================================================
+
+name: ETL Pipeline Notturna
+
+on:
+  # Esecuzione automatica: ogni notte alle 01:00 UTC (02:00 CET / 03:00 CEST)
+  schedule:
+    - cron: '0 1 * * *'
+
+  # Esecuzione manuale da GitHub UI (con opzioni)
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Limita il numero di aziende (lascia vuoto per tutte)'
+        required: false
+        default: ''
+      skip_embeddings:
+        description: 'Salta calcolo embeddings (più veloce per test)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      company:
+        description: 'Nome azienda specifica (lascia vuoto per tutte)'
+        required: false
+        default: ''
+
+jobs:
+  etl:
+    name: Esegui ETL Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # Sicurezza: timeout dopo 1 ora
+
+    steps:
+      # 1. Checkout del codice
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Python
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # 3. Installa dipendenze
+      - name: Installa dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r 05_requirements.txt
+
+      # 4. Crea file .env dai secret GitHub
+      - name: Crea file .env
+        run: |
+          cat > .env <<EOF
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_DRIVE_FOLDER_ID=${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GOOGLE_CREDENTIALS_PATH=credentials.json
+          EOF
+
+      # 5. Ricrea il file credentials.json (Google Service Account)
+      - name: Crea credentials.json
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      # 6. Costruisci i parametri da riga di comando
+      - name: Costruisci parametri ETL
+        id: build_params
+        run: |
+          PARAMS=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            PARAMS="$PARAMS --limit ${{ github.event.inputs.limit }}"
+          fi
+          if [ "${{ github.event.inputs.skip_embeddings }}" = "true" ]; then
+            PARAMS="$PARAMS --skip-embeddings"
+          fi
+          if [ -n "${{ github.event.inputs.company }}" ]; then
+            PARAMS="$PARAMS --company '${{ github.event.inputs.company }}'"
+          fi
+          echo "params=$PARAMS" >> $GITHUB_OUTPUT
+
+      # 7. Esegui ETL
+      - name: Esegui ETL Pipeline
+        run: |
+          python 02_etl_pipeline.py ${{ steps.build_params.outputs.params }}
+
+      # 8. Carica il log come artefatto
+      - name: Carica log ETL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etl-log-${{ github.run_number }}
+          path: etl_run.log
+          retention-days: 30
+
+      # 9. Notifica in caso di fallimento
+      - name: Notifica fallimento (opzionale)
+        if: failure()
+        run: |
+          echo "::error::ETL Pipeline fallita. Controlla il log per i dettagli."
+          # Aggiungere qui webhook Slack/email se necessario
+          # curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+          #   -H 'Content-type: application/json' \
+          #   -d '{"text":"⚠️ ETL Deal Pipeline fallita! Controlla GitHub Actions."}'
+
+# =============================================================================
+# Secret GitHub necessari:
+# =============================================================================
+# SUPABASE_URL              → es. https://xxxx.supabase.co
+# SUPABASE_SERVICE_KEY      → chiave service_role (non anon!)
+# OPENAI_API_KEY            → sk-...
+# GOOGLE_SHEET_ID           → ID del Google Sheet principale
+# GOOGLE_DRIVE_FOLDER_ID    → ID cartella root Drive (opzionale)
+# GOOGLE_CREDENTIALS_JSON   → contenuto JSON del file credentials.json
+#                             (incollare tutto il JSON come valore del secret)
