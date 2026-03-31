@@ -129,7 +129,7 @@ def search(
     max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
     solo_interessanti: bool = True,
-    limit: int = 15,
+    limit: int = 50,
     explain: bool = False,
 ) -> list[dict]:
     """
