@@ -146,10 +146,12 @@
       font-size: .78rem; font-weight: 600; border-radius: 4px;
       padding: .15rem .55rem;
     }
-    .badge-sector  { background: var(--blue-light); color: var(--blue); }
-    .badge-geo     { background: var(--lgray);       color: var(--gray); }
-    .badge-sale    { background: var(--green-bg);     color: var(--green); }
-    .badge-neg     { background: var(--orange-bg);    color: var(--orange); }
+    .badge-sector   { background: var(--blue-light); color: var(--blue); }
+    .badge-geo      { background: var(--lgray);       color: var(--gray); }
+    .badge-sale     { background: var(--green-bg);    color: var(--green); }
+    .badge-neg      { background: var(--orange-bg);   color: var(--orange); }
+    .badge-chiaro   { background: #D1FAE5; color: #065F46; }
+    .badge-potenziale { background: #FEF9C3; color: #854D0E; }
     .result-financials {
       display: flex; gap: 1.2rem; font-size: .88rem; flex-wrap: wrap; margin-bottom: .3rem;
     }
@@ -395,6 +397,11 @@ function buildResultCard(c, rank) {
       <div class="score-track"><div class="score-fill" style="width:${Math.round(c.score*100)}%"></div></div>
     </div>` : '';
   const expl = c.match_explanation ? `<div class="result-explanation">🤖 ${c.match_explanation}</div>` : '';
+  const interestBadge = c.livello_interesse === 'chiaro'
+    ? `<span class="badge badge-chiaro">✅ Interesse chiaro</span>`
+    : c.livello_interesse === 'potenziale'
+    ? `<span class="badge badge-potenziale">🟡 Potenzialmente interessato</span>`
+    : '';
 
   return `
     <div class="result-card" id="card-${c.slug}">
@@ -404,6 +411,7 @@ function buildResultCard(c, rank) {
         <div class="result-meta">
           ${c.ateco_codice ? `<span class="badge badge-sector">ATECO ${c.ateco_codice}</span>` : ''}
           ${c.regione ? `<span class="badge badge-geo">📍 ${c.regione}${c.provincia ? ' · ' + c.provincia : ''}</span>` : ''}
+          ${interestBadge}
         </div>
         <div class="result-financials">
           <div class="fin-item"><span class="fin-label">Ricavi</span><span class="fin-value">${fmtEur(c.ricavi_0)}</span></div>
@@ -483,6 +491,13 @@ function renderSheet(c) {
             ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
             ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
+          </div>
+          <div style="margin-top:.4rem">
+            ${c.livello_interesse === 'chiaro'
+              ? `<span class="badge badge-chiaro">✅ Interesse chiaro</span>`
+              : c.livello_interesse === 'potenziale'
+              ? `<span class="badge badge-potenziale">🟡 Potenzialmente interessato</span>`
+              : `<span class="badge" style="background:#F3F4F6;color:#6B7280">⚪ Non contattato / non classificato</span>`}
           </div>
         </div>
       </div>

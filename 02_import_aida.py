@@ -76,41 +76,90 @@ def to_date(val: str) -> str | None:
             pass
     return None
 
-NEGATIVE_NOTE_PATTERNS = [
+# Segnali esplicitamente negativi — escludono sempre
+NEGATIVE_PATTERNS = [
     "non interessat",
-    "non fa spurghi",
-    "non fanno spurghi",
     "no interessat",
     "non iteressati",
+    "non fa spurghi",
+    "non fanno spurghi",
+    "no spurghi",
     "pubblica",
     "parte di",
     "troppo piccola",
-    "no spurghi",
     "gia in contatto con bravo",
     "già in contatto con bravo",
 ]
 
+# Interesse POTENZIALE — segnali soft (controllati PRIMA di quelli chiari)
+POTENZIALE_PATTERNS = [
+    "potenzialmente interessat",
+    "potenzialmente",
+    "forse interessat",
+    "possibile interesse",
+    "da valutare",
+    "potrebbe interessarsi",
+    "potrebbe essere interessat",
+    "aperto a valutare",
+    "disponibile a valutare",
+]
+
+# Interesse CHIARO — segnali espliciti di apertura alla vendita
+CHIARO_PATTERNS = [
+    "interessat",          # interessato/a/i/e
+    "vuole vendere",
+    "vogliono vendere",
+    "disponibile a cedere",
+    "disponibili a cedere",
+    "confermato interesse",
+    "aperto alla cessione",
+    "si vuole cedere",
+    "procediamo",
+    "valutiamo",
+    "accordo",
+]
+
+
+def compute_interesse(note: str | None, next_steps: str | None = None) -> tuple[bool, str | None]:
+    """
+    Ritorna (is_interessante, livello_interesse).
+    livello_interesse: 'chiaro' | 'potenziale' | None
+
+    Logica strict-whitelist:
+    - Nessuna nota → False, None
+    - Segnali negativi → False, None
+    - Interesse potenziale (es. "potenzialmente interessato") → True, 'potenziale'
+    - Interesse chiaro (es. "interessato", "vuole vendere") → True, 'chiaro'
+    - Note senza segnali espliciti (es. solo "richiamare") → False, None
+    """
+    text = ((note or "") + " " + (next_steps or "")).strip().lower()
+    if not text:
+        return False, None
+
+    # Segnali negativi escludono sempre
+    for pat in NEGATIVE_PATTERNS:
+        if pat in text:
+            return False, None
+
+    # Potenziale prima (più specifico — "potenzialmente interessato" non deve
+    # cadere nella bucket "chiaro" per via del match su "interessat")
+    for pat in POTENZIALE_PATTERNS:
+        if pat in text:
+            return True, "potenziale"
+
+    # Interesse chiaro
+    for pat in CHIARO_PATTERNS:
+        if pat in text:
+            return True, "chiaro"
+
+    # Nessun segnale positivo riconosciuto → escludi
+    return False, None
+
+
+# Retrocompatibilità — usato solo internamente
 def compute_is_interessante(note: str | None, next_steps: str | None = None) -> bool:
-    """
-    Strict whitelist: TRUE solo se c'è una nota (o next_steps) con segnali di
-    apertura/interesse. Aziende senza note = non contattate = FALSE.
-    """
-    has_note       = bool(note and note.strip())
-    has_next_steps = bool(next_steps and next_steps.strip())
-
-    # Nessuna informazione → non sappiamo nulla → escludi
-    if not has_note and not has_next_steps:
-        return False
-
-    # Se c'è una nota, controlla che non contenga segnali negativi
-    if has_note:
-        note_lower = note.lower()
-        for pattern in NEGATIVE_NOTE_PATTERNS:
-            if pattern in note_lower:
-                return False
-
-    # Ha qualcosa di scritto (nota o next_steps) senza segnali negativi → includi
-    return True
+    is_int, _ = compute_interesse(note, next_steps)
+    return is_int
 
 
 def build_embedding_text(row: dict) -> str:
@@ -213,14 +262,17 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
         except ValueError:
             sheet_row_int = None
 
+        _is_int, _livello = compute_interesse(note_val, next_steps_val)
+
         rec = {
-            "slug":             slug,
-            "ragione_sociale":  ragione,
-            "sheet_row":        sheet_row_int,
-            "note":             note_val,
-            "contatti":         contatti_val,
-            "next_steps":       next_steps_val,
-            "is_interessante":  compute_is_interessante(note_val, next_steps_val),
+            "slug":              slug,
+            "ragione_sociale":   ragione,
+            "sheet_row":         sheet_row_int,
+            "note":              note_val,
+            "contatti":          contatti_val,
+            "next_steps":        next_steps_val,
+            "is_interessante":   _is_int,
+            "livello_interesse": _livello,
             "partita_iva":      row[5].strip() or None,
             "ateco_codice":     row[6].strip() or None,
             "regione":          row[7].strip() or None,

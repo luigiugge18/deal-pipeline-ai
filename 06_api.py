@@ -84,11 +84,12 @@ class CompanyResult(BaseModel):
     dm_nome:         Optional[str]
     score:           Optional[float]
     match_explanation: Optional[str] = None
-    note:            Optional[str]   = None
-    contatti:        Optional[str]   = None
-    next_steps:      Optional[str]   = None
-    sheet_row:       Optional[int]   = None
-    is_interessante: Optional[bool]  = None
+    note:              Optional[str]   = None
+    contatti:          Optional[str]   = None
+    next_steps:        Optional[str]   = None
+    sheet_row:         Optional[int]   = None
+    is_interessante:   Optional[bool]  = None
+    livello_interesse: Optional[str]   = None
 
 class SearchResponse(BaseModel):
     results:    list[CompanyResult]

@@ -54,6 +54,10 @@ CREATE TABLE companies (
     dm_nome             TEXT,                                  -- Decision Maker nome
     dm_codice_fiscale   TEXT,                                  -- Decision Maker CF
 
+    -- Qualificazione interesse
+    is_interessante     BOOLEAN,
+    livello_interesse   TEXT,                                  -- 'chiaro' | 'potenziale' | NULL
+
     -- Vettore embedding per ricerca semantica
     embedding           VECTOR(1536),
 
@@ -117,27 +121,28 @@ CREATE OR REPLACE FUNCTION match_companies(
     filter_interessanti  BOOLEAN  DEFAULT TRUE
 )
 RETURNS TABLE (
-    id               UUID,
-    ragione_sociale  TEXT,
-    slug             TEXT,
-    ateco_codice     TEXT,
-    regione          TEXT,
-    provincia        TEXT,
-    comune           TEXT,
-    ricavi_0         BIGINT,
-    ebitda_0         BIGINT,
-    ebitda_margin_0  NUMERIC,
-    website          TEXT,
-    dm_nome          TEXT,
-    note             TEXT,
-    contatti         TEXT,
-    next_steps       TEXT,
-    sheet_row        INT,
-    is_interessante  BOOLEAN,
-    score            FLOAT
+    id                 UUID,
+    ragione_sociale    TEXT,
+    slug               TEXT,
+    ateco_codice       TEXT,
+    regione            TEXT,
+    provincia          TEXT,
+    comune             TEXT,
+    ricavi_0           BIGINT,
+    ebitda_0           BIGINT,
+    ebitda_margin_0    NUMERIC,
+    website            TEXT,
+    dm_nome            TEXT,
+    note               TEXT,
+    contatti           TEXT,
+    next_steps         TEXT,
+    sheet_row          INT,
+    is_interessante    BOOLEAN,
+    livello_interesse  TEXT,
+    score              FLOAT
 )
 LANGUAGE sql STABLE
-AS $$
+AS $func$
     SELECT
         c.id,
         c.ragione_sociale,
@@ -156,19 +161,20 @@ AS $$
         c.next_steps,
         c.sheet_row,
         c.is_interessante,
+        c.livello_interesse,
         1 - (c.embedding <=> query_embedding) AS score
     FROM companies c
     WHERE
-        (min_ricavi          IS NULL OR c.ricavi_0        >= min_ricavi)
-        AND (max_ricavi      IS NULL OR c.ricavi_0        <= max_ricavi)
-        AND (min_ebitda_pct  IS NULL OR c.ebitda_margin_0 >= min_ebitda_pct)
-        AND (filter_ateco    IS NULL OR c.ateco_codice = ANY(filter_ateco))
-        AND (filter_regione  IS NULL OR c.regione ILIKE '%' || filter_regione || '%')
+        (min_ricavi         IS NULL OR c.ricavi_0        >= min_ricavi)
+        AND (max_ricavi     IS NULL OR c.ricavi_0        <= max_ricavi)
+        AND (min_ebitda_pct IS NULL OR c.ebitda_margin_0 >= min_ebitda_pct)
+        AND (filter_ateco   IS NULL OR c.ateco_codice = ANY(filter_ateco))
+        AND (filter_regione IS NULL OR strpos(lower(c.regione), lower(filter_regione)) > 0)
         AND (NOT filter_interessanti OR c.is_interessante = TRUE)
         AND c.embedding IS NOT NULL
     ORDER BY c.embedding <=> query_embedding
     LIMIT match_count;
-$$;
+$func$;
 
 -- =============================================================================
 -- TRIGGER: aggiorna last_updated
