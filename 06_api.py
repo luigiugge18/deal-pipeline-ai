@@ -61,27 +61,28 @@ app.add_middleware(
 
 class SearchRequest(BaseModel):
     query:          Optional[str]        = Field(None,  description='Testo libero del buyer')
-    sectors:        Optional[list[str]]  = Field(None,  description='Lista settori')
-    geography:      Optional[str]        = Field(None,  description='Area geografica')
-    min_revenue:    Optional[float]      = Field(None,  description='Fatturato minimo (€)')
-    max_revenue:    Optional[float]      = Field(None,  description='Fatturato massimo (€)')
-    min_ebitda_pct: Optional[float]      = Field(None,  description='EBITDA% minimo')
-    for_sale:       bool                 = Field(True,  description='Solo aziende in vendita')
+    ateco_codici:   Optional[list[str]]  = Field(None,  description='Codici ATECO 2007')
+    regione:        Optional[str]        = Field(None,  description='Regione (es. LOMBARDIA)')
+    min_ricavi:     Optional[float]      = Field(None,  description='Ricavi minimi (€)')
+    max_ricavi:     Optional[float]      = Field(None,  description='Ricavi massimi (€)')
+    min_ebitda_pct: Optional[float]      = Field(None,  description='EBITDA margin % minimo')
     limit:          int                  = Field(15,    ge=1, le=50)
     explain:        bool                 = Field(False, description='Genera spiegazione AI per top 5')
 
 class CompanyResult(BaseModel):
-    id:          str
-    name:        str
-    slug:        str
-    sector:      Optional[str]
-    geography:   Optional[str]
-    revenue:     Optional[float]
-    ebitda_pct:  Optional[float]
-    for_sale:    bool
-    sale_status: Optional[str]
-    short_note:  Optional[str]
-    score:       Optional[float]
+    id:              str
+    ragione_sociale: str
+    slug:            str
+    ateco_codice:    Optional[str]
+    regione:         Optional[str]
+    provincia:       Optional[str]
+    comune:          Optional[str]
+    ricavi_0:        Optional[float]
+    ebitda_0:        Optional[float]
+    ebitda_margin_0: Optional[float]
+    website:         Optional[str]
+    dm_nome:         Optional[str]
+    score:           Optional[float]
     match_explanation: Optional[str] = None
 
 class SearchResponse(BaseModel):
@@ -115,12 +116,11 @@ async def search_endpoint(req: SearchRequest):
     try:
         results_raw = search(
             query_text=req.query,
-            sectors=req.sectors,
-            geography=req.geography,
-            min_revenue=req.min_revenue,
-            max_revenue=req.max_revenue,
+            ateco_codici=req.ateco_codici,
+            regione=req.regione,
+            min_ricavi=req.min_ricavi,
+            max_ricavi=req.max_ricavi,
             min_ebitda_pct=req.min_ebitda_pct,
-            for_sale=req.for_sale,
             limit=req.limit,
             explain=req.explain,
         )
@@ -161,13 +161,23 @@ async def company_detail(slug: str):
 
 @app.get('/sectors', tags=['Utility'])
 async def list_sectors():
-    """Lista tutti i settori presenti nel database, ordinati per frequenza."""
+    """Lista tutti i codici ATECO presenti nel database, ordinati per frequenza."""
     from supabase import create_client
     sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
-    resp = sb.table('companies').select('sector').not_.is_('sector', 'null').execute()
+    resp = sb.table('companies').select('ateco_codice').not_.is_('ateco_codice', 'null').execute()
     from collections import Counter
-    counts = Counter(r['sector'] for r in (resp.data or []) if r.get('sector'))
-    return [{'sector': s, 'count': c} for s, c in counts.most_common()]
+    counts = Counter(r['ateco_codice'] for r in (resp.data or []) if r.get('ateco_codice'))
+    return [{'ateco_codice': s, 'count': c} for s, c in counts.most_common()]
+
+@app.get('/regioni', tags=['Utility'])
+async def list_regioni():
+    """Lista tutte le regioni presenti nel database, ordinate per frequenza."""
+    from supabase import create_client
+    sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+    resp = sb.table('companies').select('regione').not_.is_('regione', 'null').execute()
+    from collections import Counter
+    counts = Counter(r['regione'] for r in (resp.data or []) if r.get('regione'))
+    return [{'regione': r, 'count': c} for r, c in counts.most_common()]
 
 
 # =============================================================================
@@ -225,8 +235,12 @@ def _fetch_companies(slugs: list[str]) -> list[dict]:
     from supabase import create_client
     sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
     resp = sb.table('companies').select(
-        'name, slug, sector, geography, revenue, ebitda, ebitda_pct, '
-        'employees, sale_status, asking_price, short_note, tags, founded_year'
+        'ragione_sociale, slug, ateco_codice, regione, provincia, comune, '
+        'partita_iva, website, telefono, data_bilancio, '
+        'ricavi_0, ricavi_1, ricavi_2, '
+        'ebitda_0, ebitda_1, ebitda_2, '
+        'ebitda_margin_0, ebitda_margin_1, ebitda_margin_2, '
+        'azionisti, csh_nome, dm_nome, dm_codice_fiscale'
     ).in_('slug', slugs).execute()
     return resp.data or []
 

@@ -66,34 +66,31 @@ def get_embedding(text: str) -> list[float]:
 # =============================================================================
 
 def search_structured(
-    sectors: list[str] | None = None,
-    geography: str | None = None,
-    min_revenue: float | None = None,
-    max_revenue: float | None = None,
+    ateco_codici: list[str] | None = None,
+    regione: str | None = None,
+    min_ricavi: float | None = None,
+    max_ricavi: float | None = None,
     min_ebitda_pct: float | None = None,
-    for_sale: bool = True,
     limit: int = 20,
 ) -> list[dict]:
-    """Ricerca con soli filtri strutturati, ordinata per EBITDA desc."""
+    """Ricerca con soli filtri strutturati, ordinata per ricavi desc."""
     sb = _get_supabase()
     q = sb.table('companies').select(
-        'id, name, slug, sector, geography, revenue, ebitda, ebitda_pct, '
-        'employees, for_sale, sale_status, asking_price, short_note, tags, last_updated'
+        'id, ragione_sociale, slug, ateco_codice, regione, provincia, comune, '
+        'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, last_updated'
     )
-    if for_sale:
-        q = q.eq('for_sale', True)
-    if sectors:
-        q = q.in_('sector', sectors)
-    if geography:
-        q = q.ilike('geography', f'%{geography}%')
-    if min_revenue is not None:
-        q = q.gte('revenue', min_revenue)
-    if max_revenue is not None:
-        q = q.lte('revenue', max_revenue)
+    if ateco_codici:
+        q = q.in_('ateco_codice', ateco_codici)
+    if regione:
+        q = q.ilike('regione', f'%{regione}%')
+    if min_ricavi is not None:
+        q = q.gte('ricavi_0', min_ricavi)
+    if max_ricavi is not None:
+        q = q.lte('ricavi_0', max_ricavi)
     if min_ebitda_pct is not None:
-        q = q.gte('ebitda_pct', min_ebitda_pct)
+        q = q.gte('ebitda_margin_0', min_ebitda_pct)
 
-    q = q.order('ebitda', desc=True).limit(limit)
+    q = q.order('ricavi_0', desc=True).limit(limit)
     resp = q.execute()
     return resp.data or []
 
@@ -104,7 +101,6 @@ def search_structured(
 
 def search_semantic(
     query_text: str,
-    for_sale: bool = True,
     limit: int = 20,
 ) -> list[dict]:
     """Ricerca full semantica via pgvector."""
@@ -112,7 +108,6 @@ def search_semantic(
     sb = _get_supabase()
     resp = sb.rpc('match_companies', {
         'query_embedding': embedding,
-        'only_for_sale': for_sale,
         'match_count': limit,
     }).execute()
     return resp.data or []
@@ -124,18 +119,17 @@ def search_semantic(
 
 def search(
     query_text: str | None = None,
-    sectors: list[str] | None = None,
-    geography: str | None = None,
-    min_revenue: float | None = None,
-    max_revenue: float | None = None,
+    ateco_codici: list[str] | None = None,
+    regione: str | None = None,
+    min_ricavi: float | None = None,
+    max_ricavi: float | None = None,
     min_ebitda_pct: float | None = None,
-    for_sale: bool = True,
     limit: int = 15,
     explain: bool = False,
 ) -> list[dict]:
     """
     Ricerca ibrida:
-      1. Filtra strutturalmente (revenue, sector, ecc.)
+      1. Filtra strutturalmente (ricavi, ateco, regione, ecc.)
       2. Ordina per similarità semantica con query_text
       3. Opzionalmente genera spiegazione AI per top 5
     """
@@ -146,24 +140,22 @@ def search(
         embedding = get_embedding(query_text)
         resp = sb.rpc('match_companies', {
             'query_embedding': embedding,
-            'min_revenue': min_revenue,
-            'max_revenue': max_revenue,
+            'min_ricavi': min_ricavi,
+            'max_ricavi': max_ricavi,
             'min_ebitda_pct': min_ebitda_pct,
-            'filter_sectors': sectors,
-            'filter_geography': geography,
-            'only_for_sale': for_sale,
+            'filter_ateco': ateco_codici,
+            'filter_regione': regione,
             'match_count': limit,
         }).execute()
         results = resp.data or []
     else:
         # Solo filtri strutturati
         results = search_structured(
-            sectors=sectors,
-            geography=geography,
-            min_revenue=min_revenue,
-            max_revenue=max_revenue,
+            ateco_codici=ateco_codici,
+            regione=regione,
+            min_ricavi=min_ricavi,
+            max_ricavi=max_ricavi,
             min_ebitda_pct=min_ebitda_pct,
-            for_sale=for_sale,
             limit=limit,
         )
 
@@ -185,12 +177,11 @@ def _add_explanations(buyer_query: str, companies: list[dict]) -> list[dict]:
             prompt = (
                 f"Sei un advisor M&A. Il buyer cerca: '{buyer_query}'.\n"
                 f"Spiega in 1-2 frasi perché questa azienda è un buon match:\n"
-                f"- Nome: {c.get('name')}\n"
-                f"- Settore: {c.get('sector')}\n"
-                f"- Fatturato: {c.get('revenue', 'N/D')}\n"
-                f"- EBITDA%: {c.get('ebitda_pct', 'N/D')}\n"
-                f"- Geografia: {c.get('geography')}\n"
-                f"- Note: {c.get('short_note', '')}"
+                f"- Nome: {c.get('ragione_sociale')}\n"
+                f"- ATECO: {c.get('ateco_codice')}\n"
+                f"- Ricavi: {c.get('ricavi_0', 'N/D')} EUR\n"
+                f"- EBITDA%: {c.get('ebitda_margin_0', 'N/D')}%\n"
+                f"- Regione: {c.get('regione')} - {c.get('provincia')}\n"
             )
             resp = client.chat.completions.create(
                 model=GPT_MODEL,
