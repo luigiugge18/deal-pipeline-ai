@@ -1,0 +1,35 @@
+# Deal Pipeline AI — Dipendenze Python
+# Installazione: pip install -r 05_requirements.txt
+
+# Core
+python-dotenv>=1.0.0
+
+# Supabase
+supabase>=2.3.0
+
+# OpenAI
+openai>=1.12.0
+
+# Google APIs
+gspread>=6.0.0
+google-auth>=2.27.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.115.0
+
+# Data processing
+pandas>=2.1.0
+openpyxl>=3.1.0
+numpy>=1.26.0
+
+# Document parsing (Drive)
+PyMuPDF>=1.23.0        # PDF text extraction (fitz)
+python-docx>=1.1.0     # DOCX text extraction
+
+# Export
+reportlab>=4.1.0       # PDF generation per shortlist export
+xlsxwriter>=3.2.0      # Excel export
+
+# Web API (se si costruisce backend FastAPI)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
