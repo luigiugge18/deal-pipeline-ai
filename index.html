@@ -397,10 +397,8 @@ function buildResultCard(c, rank) {
       <div class="score-track"><div class="score-fill" style="width:${Math.round(c.score*100)}%"></div></div>
     </div>` : '';
   const expl = c.match_explanation ? `<div class="result-explanation">🤖 ${c.match_explanation}</div>` : '';
-  const interestBadge = c.livello_interesse === 'chiaro'
-    ? `<span class="badge badge-chiaro">✅ Interesse chiaro</span>`
-    : c.livello_interesse === 'potenziale'
-    ? `<span class="badge badge-potenziale">🟡 Potenzialmente interessato</span>`
+  const interestBadge = c.is_interessante
+    ? `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`
     : '';
 
   return `
@@ -493,11 +491,9 @@ function renderSheet(c) {
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
           </div>
           <div style="margin-top:.4rem">
-            ${c.livello_interesse === 'chiaro'
-              ? `<span class="badge badge-chiaro">✅ Interesse chiaro</span>`
-              : c.livello_interesse === 'potenziale'
-              ? `<span class="badge badge-potenziale">🟡 Potenzialmente interessato</span>`
-              : `<span class="badge" style="background:#F3F4F6;color:#6B7280">⚪ Non contattato / non classificato</span>`}
+            ${c.is_interessante
+              ? `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`
+              : `<span class="badge" style="background:#F3F4F6;color:#6B7280">— Non segnalato come interessato</span>`}
           </div>
         </div>
       </div>

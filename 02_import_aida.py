@@ -196,50 +196,81 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
         content = resp.text
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
-    # Header row (index 0)
-    # Col indices (0-based):
-    # 0  = progressivo (ignore)
+    # Header row (index 0) — col indices (0-based):
+    # 0  = Progressivo (sheet_row)
     # 1  = Ragione sociale
-    # 2  = Note (ignore)
-    # 3  = Contatti (ignore)
-    # 4  = Next steps (ignore)
-    # 5  = Partita IVA
-    # 6  = ATECO 2007 codice
-    # 7  = Sede operativa - Regione
-    # 8  = Sede operativa - Provincia
-    # 9  = Sede operativa - Comune
-    # 10 = Numero di telefono
-    # 11 = Website
-    # 12 = Data di chiusura ultimo bilancio
-    # 13 = EBITDA EUR Ultimo
-    # 14 = EBITDA EUR Anno-1
-    # 15 = EBITDA EUR Anno-2
-    # 16 = EBITDA EUR Anno-3
-    # 17 = EBITDA EUR Anno-4
-    # 18 = EBITDA/Vendite % Ultimo
-    # 19 = EBITDA/Vendite % Anno-1
-    # 20 = EBITDA/Vendite % Anno-2
-    # 21 = EBITDA/Vendite % Anno-3
-    # 22 = EBITDA/Vendite % Anno-4
-    # 23 = Ricavi EUR Ultimo
-    # 24 = Ricavi EUR Anno-1
-    # 25 = Ricavi EUR Anno-2
-    # 26 = Ricavi EUR Anno-3
-    # 27 = Ricavi EUR Anno-4
-    # 28 = Azionisti Nome
-    # 29 = CSH Nome
-    # 30 = DM Nome completo
-    # 31 = DM Codice fiscale
+    # 2  = Interesse a vendere  ← NEW (1 = interessato, blank = no)
+    # 3  = Note
+    # 4  = Contatti
+    # 5  = Next steps
+    # 6  = Partita IVA
+    # 7  = ATECO 2007 codice
+    # 8  = Sede operativa - Regione
+    # 9  = Sede operativa - Provincia
+    # 10 = Sede operativa - Comune
+    # 11 = Numero di telefono
+    # 12 = Website
+    # 13 = Data di chiusura ultimo bilancio
+    # 14 = EBITDA EUR Ultimo
+    # 15 = EBITDA EUR Anno-1
+    # 16 = EBITDA EUR Anno-2
+    # 17 = EBITDA EUR Anno-3
+    # 18 = EBITDA EUR Anno-4
+    # 19 = EBITDA/Vendite % Ultimo
+    # 20 = EBITDA/Vendite % Anno-1
+    # 21 = EBITDA/Vendite % Anno-2
+    # 22 = EBITDA/Vendite % Anno-3
+    # 23 = EBITDA/Vendite % Anno-4
+    # 24 = Ricavi EUR Ultimo
+    # 25 = Ricavi EUR Anno-1
+    # 26 = Ricavi EUR Anno-2
+    # 27 = Ricavi EUR Anno-3
+    # 28 = Ricavi EUR Anno-4
+    # 29 = Azionisti Nome
+    # 30 = CSH Nome
+    # 31 = DM Nome completo
+    # 32 = DM Codice fiscale
+
+    # Usa dinamicamente la riga header per tollerare futuri riordini
+    header = rows[0] if rows else []
+    col_idx: dict[str, int] = {h.strip(): i for i, h in enumerate(header)}
 
     records = []
     seen_slugs: set[str] = set()
 
+    def gcol(name: str, fallback: int) -> int:
+        """Trova l'indice di una colonna per nome (case-insensitive), altrimenti usa fallback."""
+        name_low = name.lower()
+        for h, i in col_idx.items():
+            if h.lower() == name_low:
+                return i
+        log.warning(f"Colonna '{name}' non trovata nel header, uso indice {fallback}")
+        return fallback
+
+    # Risolvi indici per nome (robusto a future aggiunte di colonne)
+    IDX_SHEET_ROW    = gcol("",                     0)   # colonna A senza header
+    IDX_RAGIONE      = gcol("Ragione sociale",       1)
+    IDX_INTERESSE    = gcol("Interesse a vendere",   2)
+    IDX_NOTE         = gcol("Note",                  3)
+    IDX_CONTATTI     = gcol("Contatti",              4)
+    IDX_NEXT_STEPS   = gcol("Next steps",            5)
+    IDX_PIVA         = gcol("Partita IVA",           6)
+    IDX_ATECO        = gcol("ATECO 2007 codice",     7)
+    IDX_REGIONE      = gcol("Sede operativa - Regione",   8)
+    IDX_PROVINCIA    = gcol("Sede operativa - Provincia", 9)
+    IDX_COMUNE       = gcol("Sede operativa - Comune",    10)
+    IDX_TELEFONO     = gcol("Numero di telefono",    11)
+    IDX_WEBSITE      = gcol("Website",               12)
+    IDX_DATA         = gcol("Data di chiusura ultimo bilancio", 13)
+
+    MIN_ROW_LEN = max(IDX_DATA, IDX_WEBSITE, IDX_WEBSITE) + 20  # abbondanza per colonne finanziari
+
     for i, row in enumerate(rows[1:], start=2):  # skip header
         # Pad row se mancano colonne
-        while len(row) < 32:
+        while len(row) < MIN_ROW_LEN:
             row.append("")
 
-        ragione = row[1].strip()
+        ragione = row[IDX_RAGIONE].strip()
         if not ragione:
             continue  # skip righe senza nome
 
@@ -251,18 +282,24 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
             counter += 1
         seen_slugs.add(slug)
 
-        # col 0 = progressivo (sheet_row), col 2 = note, col 3 = contatti, col 4 = next_steps
-        sheet_row_val = row[0].strip()
-        note_val      = row[2].strip() or None
-        contatti_val  = row[3].strip() or None
-        next_steps_val= row[4].strip() or None
+        sheet_row_val  = row[IDX_SHEET_ROW].strip()
+        interesse_raw  = row[IDX_INTERESSE].strip()
+        note_val       = row[IDX_NOTE].strip()      or None
+        contatti_val   = row[IDX_CONTATTI].strip()  or None
+        next_steps_val = row[IDX_NEXT_STEPS].strip() or None
 
         try:
             sheet_row_int = int(float(sheet_row_val)) if sheet_row_val else None
         except ValueError:
             sheet_row_int = None
 
-        _is_int, _livello = compute_interesse(note_val, next_steps_val)
+        # is_interessante = 1 nella colonna "Interesse a vendere"
+        is_interessante = (interesse_raw == "1")
+        livello_interesse = "chiaro" if is_interessante else None
+
+        # offset dinamico per le colonne finanziarie AIDA
+        # (le colonne AIDA iniziano subito dopo Next steps e si susseguono in ordine fisso)
+        base = IDX_NEXT_STEPS + 1   # = IDX_PIVA
 
         rec = {
             "slug":              slug,
@@ -271,35 +308,35 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
             "note":              note_val,
             "contatti":          contatti_val,
             "next_steps":        next_steps_val,
-            "is_interessante":   _is_int,
-            "livello_interesse": _livello,
-            "partita_iva":      row[5].strip() or None,
-            "ateco_codice":     row[6].strip() or None,
-            "regione":          row[7].strip() or None,
-            "provincia":        row[8].strip() or None,
-            "comune":           row[9].strip() or None,
-            "telefono":         row[10].strip() or None,
-            "website":          row[11].strip() or None,
-            "data_bilancio":    to_date(row[12]),
-            "ebitda_0":         to_bigint(row[13]),
-            "ebitda_1":         to_bigint(row[14]),
-            "ebitda_2":         to_bigint(row[15]),
-            "ebitda_3":         to_bigint(row[16]),
-            "ebitda_4":         to_bigint(row[17]),
-            "ebitda_margin_0":  to_numeric(row[18]),
-            "ebitda_margin_1":  to_numeric(row[19]),
-            "ebitda_margin_2":  to_numeric(row[20]),
-            "ebitda_margin_3":  to_numeric(row[21]),
-            "ebitda_margin_4":  to_numeric(row[22]),
-            "ricavi_0":         to_bigint(row[23]),
-            "ricavi_1":         to_bigint(row[24]),
-            "ricavi_2":         to_bigint(row[25]),
-            "ricavi_3":         to_bigint(row[26]),
-            "ricavi_4":         to_bigint(row[27]),
-            "azionisti":        row[28].strip() or None,
-            "csh_nome":         row[29].strip() or None,
-            "dm_nome":          row[30].strip() or None,
-            "dm_codice_fiscale":row[31].strip() or None,
+            "is_interessante":   is_interessante,
+            "livello_interesse": livello_interesse,
+            "partita_iva":       row[IDX_PIVA].strip()      or None,
+            "ateco_codice":      row[IDX_ATECO].strip()     or None,
+            "regione":           row[IDX_REGIONE].strip()   or None,
+            "provincia":         row[IDX_PROVINCIA].strip() or None,
+            "comune":            row[IDX_COMUNE].strip()    or None,
+            "telefono":          row[IDX_TELEFONO].strip()  or None,
+            "website":           row[IDX_WEBSITE].strip()   or None,
+            "data_bilancio":     to_date(row[IDX_DATA]),
+            "ebitda_0":          to_bigint(row[IDX_DATA+1]),
+            "ebitda_1":          to_bigint(row[IDX_DATA+2]),
+            "ebitda_2":          to_bigint(row[IDX_DATA+3]),
+            "ebitda_3":          to_bigint(row[IDX_DATA+4]),
+            "ebitda_4":          to_bigint(row[IDX_DATA+5]),
+            "ebitda_margin_0":   to_numeric(row[IDX_DATA+6]),
+            "ebitda_margin_1":   to_numeric(row[IDX_DATA+7]),
+            "ebitda_margin_2":   to_numeric(row[IDX_DATA+8]),
+            "ebitda_margin_3":   to_numeric(row[IDX_DATA+9]),
+            "ebitda_margin_4":   to_numeric(row[IDX_DATA+10]),
+            "ricavi_0":          to_bigint(row[IDX_DATA+11]),
+            "ricavi_1":          to_bigint(row[IDX_DATA+12]),
+            "ricavi_2":          to_bigint(row[IDX_DATA+13]),
+            "ricavi_3":          to_bigint(row[IDX_DATA+14]),
+            "ricavi_4":          to_bigint(row[IDX_DATA+15]),
+            "azionisti":         row[IDX_DATA+16].strip() or None,
+            "csh_nome":          row[IDX_DATA+17].strip() or None,
+            "dm_nome":           row[IDX_DATA+18].strip() or None,
+            "dm_codice_fiscale": row[IDX_DATA+19].strip() or None,
         }
         records.append(rec)
 
