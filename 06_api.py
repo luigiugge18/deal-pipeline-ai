@@ -60,14 +60,15 @@ app.add_middleware(
 # =============================================================================
 
 class SearchRequest(BaseModel):
-    query:          Optional[str]        = Field(None,  description='Testo libero del buyer')
-    ateco_codici:   Optional[list[str]]  = Field(None,  description='Codici ATECO 2007')
-    regione:        Optional[str]        = Field(None,  description='Regione (es. LOMBARDIA)')
-    min_ricavi:     Optional[int]        = Field(None,  description='Ricavi minimi (€)')
-    max_ricavi:     Optional[int]        = Field(None,  description='Ricavi massimi (€)')
-    min_ebitda_pct: Optional[float]      = Field(None,  description='EBITDA margin % minimo')
-    limit:          int                  = Field(15,    ge=1, le=50)
-    explain:        bool                 = Field(False, description='Genera spiegazione AI per top 5')
+    query:             Optional[str]        = Field(None,  description='Testo libero del buyer')
+    ateco_codici:      Optional[list[str]]  = Field(None,  description='Codici ATECO 2007')
+    regione:           Optional[str]        = Field(None,  description='Regione (es. LOMBARDIA)')
+    min_ricavi:        Optional[int]        = Field(None,  description='Ricavi minimi (€)')
+    max_ricavi:        Optional[int]        = Field(None,  description='Ricavi massimi (€)')
+    min_ebitda_pct:    Optional[float]      = Field(None,  description='EBITDA margin % minimo')
+    solo_interessanti: bool                 = Field(True,  description='Solo aziende interessate/potenzialmente interessate')
+    limit:             int                  = Field(15,    ge=1, le=50)
+    explain:           bool                 = Field(False, description='Genera spiegazione AI per top 5')
 
 class CompanyResult(BaseModel):
     id:              str
@@ -84,6 +85,11 @@ class CompanyResult(BaseModel):
     dm_nome:         Optional[str]
     score:           Optional[float]
     match_explanation: Optional[str] = None
+    note:            Optional[str]   = None
+    contatti:        Optional[str]   = None
+    next_steps:      Optional[str]   = None
+    sheet_row:       Optional[int]   = None
+    is_interessante: Optional[bool]  = None
 
 class SearchResponse(BaseModel):
     results:    list[CompanyResult]
@@ -121,6 +127,7 @@ async def search_endpoint(req: SearchRequest):
             min_ricavi=req.min_ricavi,
             max_ricavi=req.max_ricavi,
             min_ebitda_pct=req.min_ebitda_pct,
+            solo_interessanti=req.solo_interessanti,
             limit=req.limit,
             explain=req.explain,
         )

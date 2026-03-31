@@ -107,13 +107,14 @@ CREATE TABLE buyers (
 -- FUNZIONE: match_companies (ricerca ibrida vettoriale + filtri)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION match_companies(
-    query_embedding    VECTOR(1536),
-    min_ricavi         BIGINT   DEFAULT NULL,
-    max_ricavi         BIGINT   DEFAULT NULL,
-    min_ebitda_pct     NUMERIC  DEFAULT NULL,
-    filter_ateco       TEXT[]   DEFAULT NULL,
-    filter_regione     TEXT     DEFAULT NULL,
-    match_count        INT      DEFAULT 20
+    query_embedding      VECTOR(1536),
+    min_ricavi           BIGINT   DEFAULT NULL,
+    max_ricavi           BIGINT   DEFAULT NULL,
+    min_ebitda_pct       NUMERIC  DEFAULT NULL,
+    filter_ateco         TEXT[]   DEFAULT NULL,
+    filter_regione       TEXT     DEFAULT NULL,
+    match_count          INT      DEFAULT 20,
+    filter_interessanti  BOOLEAN  DEFAULT TRUE
 )
 RETURNS TABLE (
     id               UUID,
@@ -128,6 +129,11 @@ RETURNS TABLE (
     ebitda_margin_0  NUMERIC,
     website          TEXT,
     dm_nome          TEXT,
+    note             TEXT,
+    contatti         TEXT,
+    next_steps       TEXT,
+    sheet_row        INT,
+    is_interessante  BOOLEAN,
     score            FLOAT
 )
 LANGUAGE sql STABLE
@@ -145,14 +151,20 @@ AS $$
         c.ebitda_margin_0,
         c.website,
         c.dm_nome,
+        c.note,
+        c.contatti,
+        c.next_steps,
+        c.sheet_row,
+        c.is_interessante,
         1 - (c.embedding <=> query_embedding) AS score
     FROM companies c
     WHERE
-        (min_ricavi     IS NULL OR c.ricavi_0        >= min_ricavi)
-        AND (max_ricavi IS NULL OR c.ricavi_0        <= max_ricavi)
-        AND (min_ebitda_pct IS NULL OR c.ebitda_margin_0 >= min_ebitda_pct)
-        AND (filter_ateco   IS NULL OR c.ateco_codice = ANY(filter_ateco))
-        AND (filter_regione IS NULL OR c.regione ILIKE '%' || filter_regione || '%')
+        (min_ricavi          IS NULL OR c.ricavi_0        >= min_ricavi)
+        AND (max_ricavi      IS NULL OR c.ricavi_0        <= max_ricavi)
+        AND (min_ebitda_pct  IS NULL OR c.ebitda_margin_0 >= min_ebitda_pct)
+        AND (filter_ateco    IS NULL OR c.ateco_codice = ANY(filter_ateco))
+        AND (filter_regione  IS NULL OR c.regione ILIKE '%' || filter_regione || '%')
+        AND (NOT filter_interessanti OR c.is_interessante = TRUE)
         AND c.embedding IS NOT NULL
     ORDER BY c.embedding <=> query_embedding
     LIMIT match_count;

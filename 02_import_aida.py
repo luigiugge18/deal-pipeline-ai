@@ -76,6 +76,35 @@ def to_date(val: str) -> str | None:
             pass
     return None
 
+NEGATIVE_NOTE_PATTERNS = [
+    "non interessat",
+    "non fa spurghi",
+    "non fanno spurghi",
+    "no interessat",
+    "non iteressati",
+    "pubblica",
+    "parte di",
+    "troppo piccola",
+    "no spurghi",
+    "gia in contatto con bravo",
+    "già in contatto con bravo",
+]
+
+def compute_is_interessante(note: str | None) -> bool:
+    """
+    Whitelist approach: TRUE per default (aziende non ancora contattate o con note
+    di apertura). FALSE solo se la nota contiene segnali espliciti di non-interesse
+    o esclusione.
+    """
+    if not note or not note.strip():
+        return True  # non contattata = potenziale target
+    note_lower = note.lower()
+    for pattern in NEGATIVE_NOTE_PATTERNS:
+        if pattern in note_lower:
+            return False
+    return True  # openness semantica: tutto il resto è "interessante"
+
+
 def build_embedding_text(row: dict) -> str:
     """Costruisce il testo da embeddare per la ricerca semantica."""
     parts = [
@@ -165,9 +194,25 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
             counter += 1
         seen_slugs.add(slug)
 
+        # col 0 = progressivo (sheet_row), col 2 = note, col 3 = contatti, col 4 = next_steps
+        sheet_row_val = row[0].strip()
+        note_val      = row[2].strip() or None
+        contatti_val  = row[3].strip() or None
+        next_steps_val= row[4].strip() or None
+
+        try:
+            sheet_row_int = int(float(sheet_row_val)) if sheet_row_val else None
+        except ValueError:
+            sheet_row_int = None
+
         rec = {
             "slug":             slug,
             "ragione_sociale":  ragione,
+            "sheet_row":        sheet_row_int,
+            "note":             note_val,
+            "contatti":         contatti_val,
+            "next_steps":       next_steps_val,
+            "is_interessante":  compute_is_interessante(note_val),
             "partita_iva":      row[5].strip() or None,
             "ateco_codice":     row[6].strip() or None,
             "regione":          row[7].strip() or None,

@@ -299,6 +299,9 @@
     <div class="btn-group">
       <button class="btn btn-primary" onclick="doSearch()">🔍 Cerca</button>
       <button class="btn btn-outline" onclick="clearSearch()">✕ Cancella</button>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.87rem;cursor:pointer;margin-left:.5rem">
+        <input type="checkbox" id="q-interessanti" checked /> Solo aziende interessate
+      </label>
       <label style="display:flex;align-items:center;gap:.4rem;font-size:.87rem;cursor:pointer;margin-left:auto">
         <input type="checkbox" id="q-explain" /> Genera spiegazione AI (top 5)
       </label>
@@ -369,14 +372,15 @@ async function doSearch() {
   area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Ricerca in corso…</div>`;
 
   const body = {
-    query:          document.getElementById('q-text').value.trim() || null,
-    ateco_codici:   document.getElementById('q-sector').value ? [document.getElementById('q-sector').value] : null,
-    regione:        document.getElementById('q-geo').value.trim() || null,
-    min_ricavi:     parseInt(document.getElementById('q-rev-min').value) || null,
-    max_ricavi:     parseInt(document.getElementById('q-rev-max').value) || null,
-    min_ebitda_pct: parseFloat(document.getElementById('q-ebitda').value) || null,
-    limit:          15,
-    explain:        document.getElementById('q-explain').checked,
+    query:             document.getElementById('q-text').value.trim() || null,
+    ateco_codici:      document.getElementById('q-sector').value ? [document.getElementById('q-sector').value] : null,
+    regione:           document.getElementById('q-geo').value.trim() || null,
+    min_ricavi:        parseInt(document.getElementById('q-rev-min').value) || null,
+    max_ricavi:        parseInt(document.getElementById('q-rev-max').value) || null,
+    min_ebitda_pct:    parseFloat(document.getElementById('q-ebitda').value) || null,
+    solo_interessanti: document.getElementById('q-interessanti').checked,
+    limit:             15,
+    explain:           document.getElementById('q-explain').checked,
   };
 
   try {
@@ -610,9 +614,13 @@ function renderSheet(c) {
           ${c.partita_iva ? `<strong>P.IVA:</strong> ${c.partita_iva} &nbsp;` : ''}
           ${c.website ? `<strong>Web:</strong> <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank">${c.website}</a> &nbsp;` : ''}
           ${c.telefono ? `<strong>Tel:</strong> ${c.telefono}` : ''}
+          ${c.sheet_row != null ? `&nbsp; <a href="https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551" target="_blank" style="font-size:.85rem">📊 Apri in Google Sheet</a>` : ''}
         </div>
         ${c.dm_nome ? `<div class="alert alert-info" style="margin-top:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
         ${c.azionisti ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
+        ${c.contatti ? `<div style="margin-top:.75rem;font-size:.85rem"><strong>Contatti:</strong> ${c.contatti}</div>` : ''}
+        ${c.note ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
+        ${c.next_steps ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
       </div>
 
       <div id="tab-calls" class="tab-pane">${callsHtml}</div>
