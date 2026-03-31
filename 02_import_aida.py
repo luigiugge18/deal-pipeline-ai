@@ -110,7 +110,7 @@ KNOWN_COLS: dict[str, list[str]] = {
     "next_steps":         ["next steps", "next step", "prossimi passi", "azioni"],
     "partita_iva":        ["partita iva", "p.iva", "piva", "vat"],
     "ateco_codice":       ["ateco 2007 codice", "ateco codice", "ateco 2007", "ateco"],
-    "regione":            ["sede operativa - regione", "regione", "region"],
+    "regione":            ["sede operativa - regione - regione", "sede operativa - regione", "regione", "region"],
     "provincia":          ["sede operativa - provincia", "provincia", "province"],
     "comune":             ["sede operativa - comune", "comune", "city", "citta"],
     "telefono":           ["numero di telefono", "telefono", "tel", "phone"],
@@ -170,16 +170,27 @@ def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], d
 
     # ── 2. Scalar fields (exact then fuzzy) ───────────────────────────────────
     for field, variants in KNOWN_COLS.items():
-        # exact match first
+        # exact match first, then substring containment
         found = False
+        variants_lower = [v.lower() for v in variants]
         for i, hl in enumerate(header_lower):
             if i in claimed:
                 continue
-            if hl in [v.lower() for v in variants]:
+            if hl in variants_lower:
                 field_map[field] = i
                 claimed.add(i)
                 found = True
                 break
+        if not found:
+            # substring containment: any variant appears in the header
+            for i, hl in enumerate(header_lower):
+                if i in claimed:
+                    continue
+                if any(v in hl for v in variants_lower):
+                    field_map[field] = i
+                    claimed.add(i)
+                    found = True
+                    break
         if found:
             continue
         # fuzzy match
@@ -242,7 +253,8 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
         log.error("CSV vuoto!")
         return []
 
-    header = [h.strip() for h in rows[0]]
+    # Normalize headers: replace newlines/tabs with space, collapse whitespace
+    header = [re.sub(r'\s+', ' ', h).strip() for h in rows[0]]
     log.info(f"Header rilevato: {header}")
 
     field_map, unmatched_cols, fin_map = detect_columns(header)

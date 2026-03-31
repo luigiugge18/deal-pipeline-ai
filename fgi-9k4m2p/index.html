@@ -331,10 +331,9 @@ function displayName(c) {
   return c.ragione_sociale;
 }
 
-// Year label for financial slot
+// Year label for financial slot — always shows the actual year
 function yearLabel(c, slot) {
-  const yr = c[`anno_${slot}`];
-  return yr ? String(yr) : slot === 0 ? 'Ultimo' : `Ann-${slot}`;
+  return c[`anno_${slot}`] ? String(c[`anno_${slot}`]) : '';
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -442,19 +441,19 @@ function buildResultCard(c, rank) {
     : '';
 
   // Financial row with real years
-  const yr0 = c.anno_0 ? c.anno_0 : 'Ultimo';
+  const yr0 = yearLabel(c, 0);
   const finHtml = `
     <div class="result-financials">
       <div class="fin-item">
-        <span class="fin-label">Ricavi ${yr0}</span>
+        <span class="fin-label">Ricavi${yr0 ? ' ' + yr0 : ''}</span>
         <span class="fin-value">${fmtEur(c.ricavi_0)}</span>
       </div>
       <div class="fin-item">
-        <span class="fin-label">EBITDA ${yr0}</span>
+        <span class="fin-label">EBITDA${yr0 ? ' ' + yr0 : ''}</span>
         <span class="fin-value">${fmtEur(c.ebitda_0)}</span>
       </div>
       <div class="fin-item">
-        <span class="fin-label">EBITDA% ${yr0}</span>
+        <span class="fin-label">EBITDA%${yr0 ? ' ' + yr0 : ''}</span>
         <span class="fin-value">${c.ebitda_margin_0 != null ? c.ebitda_margin_0 + '%' : 'N/D'}</span>
       </div>
     </div>`;
@@ -524,11 +523,12 @@ function renderSheet(c) {
   // Build KPI rows using real years
   const kpis = [];
   for (let i = 0; i < 3; i++) {
-    const yr = c[`anno_${i}`] || (i === 0 ? 'Ultimo' : `Ann-${i}`);
+    const yr = yearLabel(c, i);
+    const yrSuffix = yr ? ' ' + yr : '';
     kpis.push(
-      { label: `Ricavi ${yr}`,  value: fmtEur(c[`ricavi_${i}`]) },
-      { label: `EBITDA ${yr}`,  value: fmtEur(c[`ebitda_${i}`]) },
-      { label: `EBITDA% ${yr}`, value: c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : 'N/D' },
+      { label: `Ricavi${yrSuffix}`,  value: fmtEur(c[`ricavi_${i}`]) },
+      { label: `EBITDA${yrSuffix}`,  value: fmtEur(c[`ebitda_${i}`]) },
+      { label: `EBITDA%${yrSuffix}`, value: c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : 'N/D' },
     );
   }
   kpis.push(
