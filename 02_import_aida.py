@@ -98,11 +98,17 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in resp.data]
 
 # ── CSV Parsing ───────────────────────────────────────────────────────────────
-def fetch_csv() -> list[dict]:
-    log.info(f"Scaricando CSV da Google Sheets…")
-    resp = requests.get(CSV_URL, timeout=60)
-    resp.raise_for_status()
-    reader = csv.reader(io.StringIO(resp.text))
+def fetch_csv(local_file: str | None = None) -> list[dict]:
+    if local_file:
+        log.info(f"Leggendo CSV da file locale: {local_file}")
+        with open(local_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+    else:
+        log.info(f"Scaricando CSV da Google Sheets…")
+        resp = requests.get(CSV_URL, timeout=60)
+        resp.raise_for_status()
+        content = resp.text
+    reader = csv.reader(io.StringIO(content))
     rows = list(reader)
     # Header row (index 0)
     # Col indices (0-based):
@@ -197,7 +203,9 @@ def fetch_csv() -> list[dict]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    records = fetch_csv()
+    import sys
+    local_file = sys.argv[1] if len(sys.argv) > 1 else None
+    records = fetch_csv(local_file)
     total   = len(records)
     inserted = 0
     errors   = 0
