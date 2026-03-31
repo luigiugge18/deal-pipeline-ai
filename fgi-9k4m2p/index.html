@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deal Pipeline AI</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:       #1A3557;
+      --blue2:      #2E75B6;
+      --blue-light: #D6E4F0;
+      --blue-xlt:   #EBF3FB;
+      --green:      #1F7A4D;
+      --green-bg:   #D6F0E2;
+      --orange:     #B35F00;
+      --orange-bg:  #FFF0D6;
+      --gray:       #595959;
+      --lgray:      #F2F2F2;
+      --white:      #FFFFFF;
+      --radius:     8px;
+      --shadow:     0 2px 12px rgba(26,53,87,.10);
+    }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #F0F4F9; color: #222; min-height: 100vh; }
+
+    /* ── Nav ── */
+    nav {
+      background: var(--blue);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 2rem;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+    .nav-brand { color: #fff; font-size: 1.15rem; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+    .nav-brand span { color: var(--blue-light); }
+    .nav-tabs { display: flex; gap: .25rem; }
+    .nav-tab {
+      color: rgba(255,255,255,.65);
+      font-size: .9rem;
+      padding: .4rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      border: none; background: none;
+      transition: background .15s, color .15s;
+    }
+    .nav-tab:hover  { background: rgba(255,255,255,.1); color: #fff; }
+    .nav-tab.active { background: var(--blue2); color: #fff; }
+
+    /* ── Layout ── */
+    .page { display: none; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 700;
+      color: var(--blue); margin-bottom: 1rem;
+      padding-bottom: .6rem;
+      border-bottom: 2px solid var(--blue-light);
+    }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+    @media(max-width:700px){ .form-grid, .form-grid.cols3 { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-group label { font-size: .8rem; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .4px; }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      border: 1.5px solid #D1DCEA;
+      border-radius: 6px;
+      padding: .5rem .75rem;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--blue2); }
+    .form-group textarea { resize: vertical; min-height: 72px; }
+    .span2 { grid-column: span 2; }
+    .span3 { grid-column: span 3; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .4rem;
+      border: none; border-radius: 6px; padding: .6rem 1.4rem;
+      font-size: .95rem; font-weight: 600; cursor: pointer;
+      transition: filter .15s, transform .1s;
+    }
+    .btn:hover  { filter: brightness(1.08); }
+    .btn:active { transform: scale(.98); }
+    .btn-primary  { background: var(--blue2); color: #fff; }
+    .btn-outline  { background: transparent; color: var(--blue2); border: 2px solid var(--blue2); }
+    .btn-green    { background: var(--green); color: #fff; }
+    .btn-sm       { padding: .35rem .9rem; font-size: .82rem; }
+    .btn-group    { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
+
+    /* ── Results ── */
+    #results-area { margin-top: 1.5rem; }
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: .8rem;
+    }
+    .results-count {
+      font-size: .9rem; color: var(--gray);
+    }
+    .results-count strong { color: var(--blue); }
+
+    /* ── Result Card ── */
+    .result-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--blue2);
+      padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+      display: flex; gap: 1rem; align-items: flex-start;
+    }
+    .result-card:hover { box-shadow: 0 4px 20px rgba(26,53,87,.16); border-color: var(--blue); }
+    .result-card.esclusiva { border-left-color: #7C3AED; }
+    .result-rank {
+      min-width: 32px; height: 32px;
+      background: var(--blue);
+      color: #fff; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700; flex-shrink: 0;
+    }
+    .result-body { flex: 1; }
+    .result-name { font-size: 1.05rem; font-weight: 700; color: var(--blue); margin-bottom: .3rem; }
+    .result-name.esclusiva { color: #7C3AED; }
+    .result-meta { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: .4rem; }
+    .badge {
+      display: inline-flex; align-items: center;
+      font-size: .78rem; font-weight: 600; border-radius: 4px;
+      padding: .15rem .55rem;
+    }
+    .badge-sector     { background: var(--blue-light); color: var(--blue); }
+    .badge-geo        { background: var(--lgray);       color: var(--gray); }
+    .badge-sale       { background: var(--green-bg);    color: var(--green); }
+    .badge-neg        { background: var(--orange-bg);   color: var(--orange); }
+    .badge-chiaro     { background: #D1FAE5; color: #065F46; }
+    .badge-potenziale { background: #FEF9C3; color: #854D0E; }
+    .badge-esclusiva  { background: #EDE9FE; color: #5B21B6; }
+    .result-financials {
+      display: flex; gap: 1.2rem; font-size: .88rem; flex-wrap: wrap; margin-bottom: .3rem;
+    }
+    .fin-item { display: flex; flex-direction: column; gap: .05rem; }
+    .fin-label { font-size: .72rem; text-transform: uppercase; color: var(--gray); font-weight: 600; }
+    .fin-value { font-weight: 700; color: #222; }
+    .result-note { font-size: .85rem; color: var(--gray); font-style: italic; margin-top: .3rem; }
+    .result-explanation {
+      margin-top: .4rem; font-size: .84rem;
+      background: var(--blue-xlt); border-radius: 5px;
+      padding: .4rem .7rem; color: var(--blue);
+    }
+    .score-bar {
+      display: flex; align-items: center; gap: .5rem; margin-top: .5rem;
+    }
+    .score-label { font-size: .75rem; color: var(--gray); font-weight: 600; min-width: 55px; }
+    .score-track { flex: 1; height: 6px; background: #E0E9F3; border-radius: 3px; overflow: hidden; }
+    .score-fill  { height: 100%; background: var(--blue2); border-radius: 3px; transition: width .4s; }
+
+
+    /* ── Company Sheet ── */
+    #sheet-content { display: none; }
+    .sheet-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+    }
+    .sheet-name { font-size: 1.8rem; font-weight: 800; color: var(--blue); }
+    .sheet-name.esclusiva { color: #7C3AED; }
+    .sheet-sub  { font-size: .95rem; color: var(--gray); margin-top: .2rem; }
+    .tabs-bar   { display: flex; gap: .3rem; border-bottom: 2px solid var(--blue-light); margin-bottom: 1.2rem; }
+    .tab-btn {
+      padding: .55rem 1.2rem; border: none; background: none;
+      font-size: .9rem; font-weight: 600; color: var(--gray);
+      border-bottom: 3px solid transparent; cursor: pointer; margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab-btn.active { color: var(--blue2); border-bottom-color: var(--blue2); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
+    .kpi-card {
+      background: var(--blue-xlt); border-radius: 8px;
+      padding: .9rem 1rem; text-align: center;
+    }
+    .kpi-label { font-size: .75rem; color: var(--gray); font-weight: 600; text-transform: uppercase; margin-bottom: .3rem; }
+    .kpi-value { font-size: 1.4rem; font-weight: 800; color: var(--blue); }
+    .notes-text { font-size: .9rem; line-height: 1.7; white-space: pre-wrap; color: #333; }
+    .call-item  { border-left: 3px solid var(--blue-light); padding: .6rem 1rem; margin-bottom: .8rem; }
+    .call-meta  { font-size: .78rem; color: var(--gray); margin-bottom: .3rem; }
+    .call-summary { font-size: .88rem; font-style: italic; color: #444; }
+
+    /* ── Loading ── */
+    .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 3px solid var(--blue-light);
+      border-top-color: var(--blue2);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-row { display: flex; align-items: center; gap: .7rem; color: var(--gray); padding: 1rem 0; }
+
+    /* ── Empty / Error ── */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--gray); }
+    .empty-icon  { font-size: 2.5rem; margin-bottom: .5rem; }
+    .alert { border-radius: 6px; padding: .7rem 1rem; font-size: .9rem; margin-bottom: 1rem; }
+    .alert-error { background: #FEE; color: #B00; border: 1px solid #F5C5C5; }
+    .alert-info  { background: var(--blue-xlt); color: var(--blue); border: 1px solid var(--blue-light); }
+
+  </style>
+</head>
+<body>
+
+<!-- ── NAVBAR ── -->
+<nav>
+  <div class="nav-brand">Deal Pipeline <span>AI</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('search')">🔍 Ricerca Buyer</button>
+    <button class="nav-tab"        onclick="showPage('sheet')">📋 Scheda Azienda</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 1: RICERCA BUYER
+═══════════════════════════════════════════════════════════════ -->
+<div id="page-search" class="page active">
+
+  <!-- Criteri Buyer -->
+  <div class="card">
+    <div class="card-title">🎯 Criteri del Buyer</div>
+    <div class="form-grid">
+      <div class="form-group span2">
+        <label>Descrizione libera</label>
+        <textarea id="q-text" placeholder="es. azienda manifatturiera nel Nord Italia con forte export, EBITDA > 10%…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Fatturato minimo (€)</label>
+        <input type="number" id="q-rev-min" placeholder="es. 1000000" step="100000" />
+      </div>
+      <div class="form-group">
+        <label>Fatturato massimo (€)</label>
+        <input type="number" id="q-rev-max" placeholder="es. 10000000" step="100000" />
+      </div>
+    </div>
+    <div class="form-grid cols3" style="margin-top:.8rem">
+      <div class="form-group">
+        <label>EBITDA% minimo</label>
+        <input type="number" id="q-ebitda" placeholder="es. 10" step="1" />
+      </div>
+      <div class="form-group">
+        <label>Codice ATECO</label>
+        <select id="q-sector">
+          <option value="">Tutti i settori</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Regione</label>
+        <input type="text" id="q-geo" placeholder="es. LOMBARDIA, VENETO" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="doSearch()">🔍 Cerca</button>
+      <button class="btn btn-outline" onclick="clearSearch()">✕ Cancella</button>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.87rem;cursor:pointer;margin-left:.5rem">
+        <input type="checkbox" id="q-interessanti" checked /> Solo aziende interessate
+      </label>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.87rem;cursor:pointer;margin-left:auto">
+        <input type="checkbox" id="q-explain" /> Genera spiegazione AI (top 5)
+      </label>
+    </div>
+  </div>
+
+  <!-- Risultati -->
+  <div id="results-area"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 2: SCHEDA AZIENDA
+═══════════════════════════════════════════════════════════════ -->
+<div id="page-sheet" class="page">
+  <div class="card">
+    <div style="display:flex;gap:.75rem;align-items:center;">
+      <div class="form-group" style="flex:1">
+        <label>Slug azienda</label>
+        <input type="text" id="slug-input" placeholder="es. mario-rossi-srl" onkeydown="if(event.key==='Enter')loadSheet()" />
+      </div>
+      <button class="btn btn-primary" onclick="loadSheet()" style="margin-top:1.3rem">Carica</button>
+    </div>
+  </div>
+  <div id="sheet-content"></div>
+</div>
+
+
+
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────
+const PROD_API  = 'https://web-production-129e3.up.railway.app';
+const LOCAL_API = 'http://localhost:8000';
+const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? LOCAL_API
+  : PROD_API;
+
+// ─────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────
+const fmtEur = v => v == null ? 'N/D' : v >= 1e6 ? `€${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `€${(v/1e3).toFixed(0)}K` : `€${v}`;
+
+// Display name — hide if esclusiva
+function displayName(c) {
+  if (c.esclusiva) return '🔒 Azienda in esclusiva';
+  return c.ragione_sociale;
+}
+
+// Year label for financial slot
+function yearLabel(c, slot) {
+  const yr = c[`anno_${slot}`];
+  return yr ? String(yr) : slot === 0 ? 'Ultimo' : `Ann-${slot}`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Load ATECO options
+// ─────────────────────────────────────────────────────────────────
+async function loadSectors() {
+  try {
+    const resp = await fetch(`${API}/sectors`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const sel  = document.getElementById('q-sector');
+    data.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.ateco_codice;
+      opt.textContent = `${s.ateco_codice}  (${s.count})`;
+      sel.appendChild(opt);
+    });
+  } catch(e) { /* silently ignore */ }
+}
+loadSectors();
+
+// ─────────────────────────────────────────────────────────────────
+// Navigazione
+// ─────────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`page-${id}`).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Ricerca
+// ─────────────────────────────────────────────────────────────────
+async function doSearch() {
+  const area = document.getElementById('results-area');
+  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Ricerca in corso…</div>`;
+
+  const body = {
+    query:             document.getElementById('q-text').value.trim() || null,
+    ateco_codici:      document.getElementById('q-sector').value ? [document.getElementById('q-sector').value] : null,
+    regione:           document.getElementById('q-geo').value.trim() || null,
+    min_ricavi:        parseInt(document.getElementById('q-rev-min').value) || null,
+    max_ricavi:        parseInt(document.getElementById('q-rev-max').value) || null,
+    min_ebitda_pct:    parseFloat(document.getElementById('q-ebitda').value) || null,
+    solo_interessanti: document.getElementById('q-interessanti').checked,
+    limit:             50,
+    explain:           document.getElementById('q-explain').checked,
+  };
+
+  try {
+    const resp = await fetch(`${API}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderResults(data, body.query);
+  } catch(e) {
+    area.innerHTML = `<div class="alert alert-error">Errore: ${e.message}.<br>Assicurarsi che il backend sia in esecuzione su <code>${API}</code></div>`;
+  }
+}
+
+function renderResults(data, query) {
+  const area = document.getElementById('results-area');
+  if (!data.results?.length) {
+    area.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun risultato trovato. Prova ad ampliare i criteri.</p></div>`;
+    return;
+  }
+
+  const hdr = `
+    <div class="results-header">
+      <div class="results-count">
+        <strong>${data.results.length}</strong> risultati trovati
+        ${query ? `per "<em>${query}</em>"` : ''}
+        <span style="color:#aaa;margin-left:.5rem">(${data.query_time}s)</span>
+      </div>
+    </div>`;
+
+  const cards = data.results.map((c, i) => buildResultCard(c, i + 1)).join('');
+  area.innerHTML = hdr + cards;
+}
+
+function buildResultCard(c, rank) {
+  const name = displayName(c);
+  const isEsclusiva = !!c.esclusiva;
+
+  const scoreHtml = c.score != null ? `
+    <div class="score-bar">
+      <span class="score-label">Match ${Math.round(c.score * 100)}%</span>
+      <div class="score-track"><div class="score-fill" style="width:${Math.round(c.score*100)}%"></div></div>
+    </div>` : '';
+
+  const expl = c.match_explanation ? `<div class="result-explanation">🤖 ${c.match_explanation}</div>` : '';
+
+  const interestBadge = c.is_interessante
+    ? (c.livello_interesse === 'potenziale'
+        ? `<span class="badge badge-potenziale">⚡ Potenzialmente interessato</span>`
+        : `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`)
+    : '';
+
+  const esclusivaBadge = isEsclusiva
+    ? `<span class="badge badge-esclusiva">🔒 Esclusiva</span>`
+    : '';
+
+  // Financial row with real years
+  const yr0 = c.anno_0 ? c.anno_0 : 'Ultimo';
+  const finHtml = `
+    <div class="result-financials">
+      <div class="fin-item">
+        <span class="fin-label">Ricavi ${yr0}</span>
+        <span class="fin-value">${fmtEur(c.ricavi_0)}</span>
+      </div>
+      <div class="fin-item">
+        <span class="fin-label">EBITDA ${yr0}</span>
+        <span class="fin-value">${fmtEur(c.ebitda_0)}</span>
+      </div>
+      <div class="fin-item">
+        <span class="fin-label">EBITDA% ${yr0}</span>
+        <span class="fin-value">${c.ebitda_margin_0 != null ? c.ebitda_margin_0 + '%' : 'N/D'}</span>
+      </div>
+    </div>`;
+
+  // Only show "Scheda completa" button if not esclusiva
+  const scheda = !isEsclusiva
+    ? `<div style="margin-top:.5rem"><button class="btn btn-outline btn-sm" onclick="openSheet('${c.slug}',event)">📋 Scheda completa</button></div>`
+    : `<div style="margin-top:.5rem;font-size:.83rem;color:#7C3AED;">Il nome è riservato — azienda in esclusiva con un buyer.</div>`;
+
+  return `
+    <div class="result-card${isEsclusiva ? ' esclusiva' : ''}" id="card-${c.slug}">
+      <div class="result-rank">${rank}</div>
+      <div class="result-body">
+        <div class="result-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
+        <div class="result-meta">
+          ${c.ateco_codice ? `<span class="badge badge-sector">ATECO ${c.ateco_codice}</span>` : ''}
+          ${c.regione ? `<span class="badge badge-geo">📍 ${c.regione}${c.provincia ? ' · ' + c.provincia : ''}</span>` : ''}
+          ${interestBadge}
+          ${esclusivaBadge}
+        </div>
+        ${finHtml}
+        ${scoreHtml}${expl}
+        ${scheda}
+      </div>
+    </div>`;
+}
+
+function clearSearch() {
+  ['q-text','q-rev-min','q-rev-max','q-ebitda','q-geo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('q-sector').value = '';
+  document.getElementById('results-area').innerHTML = '';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Scheda azienda
+// ─────────────────────────────────────────────────────────────────
+function openSheet(slug, evt) {
+  if (evt) evt.stopPropagation();
+  document.getElementById('slug-input').value = slug;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-sheet').classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', i===1));
+  loadSheet();
+}
+
+async function loadSheet() {
+  const slug = document.getElementById('slug-input').value.trim();
+  if (!slug) return;
+  const area = document.getElementById('sheet-content');
+  area.style.display = 'block';
+  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Caricamento scheda…</div>`;
+
+  try {
+    const resp = await fetch(`${API}/company/${encodeURIComponent(slug)}`);
+    if (!resp.ok) throw new Error(resp.status === 404 ? 'Azienda non trovata' : `HTTP ${resp.status}`);
+    const c = await resp.json();
+    renderSheet(c);
+  } catch(e) {
+    area.innerHTML = `<div class="alert alert-error">Errore: ${e.message}</div>`;
+  }
+}
+
+function renderSheet(c) {
+  const isEsclusiva = !!c.esclusiva;
+  const name        = displayName(c);
+
+  // Build KPI rows using real years
+  const kpis = [];
+  for (let i = 0; i < 3; i++) {
+    const yr = c[`anno_${i}`] || (i === 0 ? 'Ultimo' : `Ann-${i}`);
+    kpis.push(
+      { label: `Ricavi ${yr}`,  value: fmtEur(c[`ricavi_${i}`]) },
+      { label: `EBITDA ${yr}`,  value: fmtEur(c[`ebitda_${i}`]) },
+      { label: `EBITDA% ${yr}`, value: c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : 'N/D' },
+    );
+  }
+  kpis.push(
+    { label: 'Provincia', value: c.provincia ?? 'N/D' },
+    { label: 'Comune',    value: c.comune    ?? 'N/D' },
+  );
+
+  const callsHtml = (c.call_notes || []).length
+    ? (c.call_notes || []).map(n => `
+        <div class="call-item">
+          <div class="call-meta">📅 ${n.call_date || 'Data N/D'} · Fonte: ${n.source || 'N/D'}</div>
+          ${n.summary ? `<div class="call-summary">${n.summary}</div>` : ''}
+        </div>`).join('')
+    : '<div style="color:var(--gray);font-size:.9rem">Nessuna call registrata.</div>';
+
+  const interestBadge = c.is_interessante
+    ? (c.livello_interesse === 'potenziale'
+        ? `<span class="badge badge-potenziale">⚡ Potenzialmente interessato</span>`
+        : `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`)
+    : `<span class="badge" style="background:#F3F4F6;color:#6B7280">— Non segnalato come interessato</span>`;
+
+  const esclusivaBadge = isEsclusiva
+    ? `<span class="badge badge-esclusiva" style="margin-left:.4rem">🔒 In esclusiva</span>`
+    : '';
+
+  // Notes tab: hide sensitive info if esclusiva
+  const notesContent = isEsclusiva
+    ? `<div class="alert alert-info">Questa azienda è in esclusiva. I dettagli di contatto sono riservati.</div>`
+    : `
+      <div style="color:var(--gray);font-size:.9rem;margin-top:.5rem">
+        ${c.partita_iva ? `<strong>P.IVA:</strong> ${c.partita_iva} &nbsp;` : ''}
+        ${c.website ? `<strong>Web:</strong> <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank">${c.website}</a> &nbsp;` : ''}
+        ${c.telefono ? `<strong>Tel:</strong> ${c.telefono}` : ''}
+        ${c.sheet_row != null ? `&nbsp; <a href="https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551" target="_blank" style="font-size:.85rem">📊 Apri in Google Sheet</a>` : ''}
+      </div>
+      ${c.dm_nome ? `<div class="alert alert-info" style="margin-top:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
+      ${c.azionisti ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
+      ${c.contatti ? `<div style="margin-top:.75rem;font-size:.85rem"><strong>Contatti:</strong> ${c.contatti}</div>` : ''}
+      ${c.note ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
+      ${c.next_steps ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
+    `;
+
+  document.getElementById('sheet-content').innerHTML = `
+    <div class="card">
+      <div class="sheet-header">
+        <div>
+          <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
+          <div class="sheet-sub">
+            ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
+            ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
+            <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
+          </div>
+          <div style="margin-top:.4rem">${interestBadge}${esclusivaBadge}</div>
+        </div>
+      </div>
+
+      <div class="tabs-bar">
+        <button class="tab-btn active" onclick="switchTab('financials',this)">📊 Financials</button>
+        <button class="tab-btn"        onclick="switchTab('notes',this)">📝 Note</button>
+        <button class="tab-btn"        onclick="switchTab('calls',this)">📞 Call History</button>
+      </div>
+
+      <div id="tab-financials" class="tab-pane active">
+        <div class="kpi-grid">${kpis.map(k=>`
+          <div class="kpi-card">
+            <div class="kpi-label">${k.label}</div>
+            <div class="kpi-value">${k.value}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <div id="tab-notes" class="tab-pane">${notesContent}</div>
+
+      <div id="tab-calls" class="tab-pane">${callsHtml}</div>
+    </div>`;
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${id}`).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

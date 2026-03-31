@@ -2,7 +2,8 @@
 Import AIDA data from Google Sheets CSV → Supabase
 ====================================================
 Uso:
-    python 02_import_aida.py
+    python 02_import_aida.py                    # scarica da Google Sheets
+    python 02_import_aida.py spurghi.csv        # usa file locale
 
 Variabili d'ambiente richieste (in .env o Railway):
     SUPABASE_URL
@@ -11,7 +12,7 @@ Variabili d'ambiente richieste (in .env o Railway):
 """
 
 from __future__ import annotations
-import os, re, time, unicodedata, logging
+import os, re, time, unicodedata, logging, difflib, json
 from datetime import datetime
 
 import requests
@@ -44,7 +45,6 @@ openai_client    = OpenAI(api_key=OPENAI_KEY)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def slugify(text: str) -> str:
-    """Converte una stringa in slug URL-safe."""
     text = unicodedata.normalize("NFD", text)
     text = text.encode("ascii", "ignore").decode()
     text = re.sub(r"[^a-z0-9]+", "-", text.lower())
@@ -76,94 +76,7 @@ def to_date(val: str) -> str | None:
             pass
     return None
 
-# Segnali esplicitamente negativi — escludono sempre
-NEGATIVE_PATTERNS = [
-    "non interessat",
-    "no interessat",
-    "non iteressati",
-    "non fa spurghi",
-    "non fanno spurghi",
-    "no spurghi",
-    "pubblica",
-    "parte di",
-    "troppo piccola",
-    "gia in contatto con bravo",
-    "già in contatto con bravo",
-]
-
-# Interesse POTENZIALE — segnali soft (controllati PRIMA di quelli chiari)
-POTENZIALE_PATTERNS = [
-    "potenzialmente interessat",
-    "potenzialmente",
-    "forse interessat",
-    "possibile interesse",
-    "da valutare",
-    "potrebbe interessarsi",
-    "potrebbe essere interessat",
-    "aperto a valutare",
-    "disponibile a valutare",
-]
-
-# Interesse CHIARO — segnali espliciti di apertura alla vendita
-CHIARO_PATTERNS = [
-    "interessat",          # interessato/a/i/e
-    "vuole vendere",
-    "vogliono vendere",
-    "disponibile a cedere",
-    "disponibili a cedere",
-    "confermato interesse",
-    "aperto alla cessione",
-    "si vuole cedere",
-    "procediamo",
-    "valutiamo",
-    "accordo",
-]
-
-
-def compute_interesse(note: str | None, next_steps: str | None = None) -> tuple[bool, str | None]:
-    """
-    Ritorna (is_interessante, livello_interesse).
-    livello_interesse: 'chiaro' | 'potenziale' | None
-
-    Logica strict-whitelist:
-    - Nessuna nota → False, None
-    - Segnali negativi → False, None
-    - Interesse potenziale (es. "potenzialmente interessato") → True, 'potenziale'
-    - Interesse chiaro (es. "interessato", "vuole vendere") → True, 'chiaro'
-    - Note senza segnali espliciti (es. solo "richiamare") → False, None
-    """
-    text = ((note or "") + " " + (next_steps or "")).strip().lower()
-    if not text:
-        return False, None
-
-    # Segnali negativi escludono sempre
-    for pat in NEGATIVE_PATTERNS:
-        if pat in text:
-            return False, None
-
-    # Potenziale prima (più specifico — "potenzialmente interessato" non deve
-    # cadere nella bucket "chiaro" per via del match su "interessat")
-    for pat in POTENZIALE_PATTERNS:
-        if pat in text:
-            return True, "potenziale"
-
-    # Interesse chiaro
-    for pat in CHIARO_PATTERNS:
-        if pat in text:
-            return True, "chiaro"
-
-    # Nessun segnale positivo riconosciuto → escludi
-    return False, None
-
-
-# Retrocompatibilità — usato solo internamente
-def compute_is_interessante(note: str | None, next_steps: str | None = None) -> bool:
-    is_int, _ = compute_interesse(note, next_steps)
-    return is_int
-
-
 def build_embedding_text(row: dict) -> str:
-    """Costruisce il testo da embeddare per la ricerca semantica."""
     parts = [
         row.get("ragione_sociale", ""),
         f"ATECO {row.get('ateco_codice', '')}",
@@ -183,172 +96,295 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     resp = openai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
     return [item.embedding for item in resp.data]
 
+
+# =============================================================================
+# Column detection — fuzzy + year-based
+# =============================================================================
+
+# Canonical column name → list of accepted variants (lowercase)
+KNOWN_COLS: dict[str, list[str]] = {
+    "ragione_sociale":    ["ragione sociale", "ragione soc", "nome azienda", "company"],
+    "interesse":          ["interesse a vendere", "interesse vendere", "interesse"],
+    "note":               ["note", "notes", "annotazioni"],
+    "contatti":           ["contatti", "contatto", "contacts"],
+    "next_steps":         ["next steps", "next step", "prossimi passi", "azioni"],
+    "partita_iva":        ["partita iva", "p.iva", "piva", "vat"],
+    "ateco_codice":       ["ateco 2007 codice", "ateco codice", "ateco 2007", "ateco"],
+    "regione":            ["sede operativa - regione", "regione", "region"],
+    "provincia":          ["sede operativa - provincia", "provincia", "province"],
+    "comune":             ["sede operativa - comune", "comune", "city", "citta"],
+    "telefono":           ["numero di telefono", "telefono", "tel", "phone"],
+    "website":            ["website", "sito web", "sito", "web"],
+    "data_bilancio":      ["data di chiusura", "data chiusura", "data bilancio", "data di chiusura ultimo bilancio"],
+    "azionisti":          ["azionisti nome", "azionisti", "shareholders"],
+    "csh_nome":           ["csh nome", "csh"],
+    "dm_nome":            ["dm nome completo", "dm nome", "decision maker", "dm"],
+    "dm_codice_fiscale":  ["dm codice fiscale", "codice fiscale dm"],
+    "esclusiva":          ["esclusiva", "exclusive"],
+}
+
+# Year regex
+YEAR_RE = re.compile(r"\b(20\d{2})\b")
+
+# Financial column keywords
+def _is_ebitda(h: str) -> bool:
+    hl = h.lower()
+    return "ebitda" in hl and "%" not in hl and "vendite" not in hl and "margin" not in hl
+
+def _is_margin(h: str) -> bool:
+    hl = h.lower()
+    return ("ebitda" in hl and ("%" in hl or "vendite" in hl)) or "margine" in hl
+
+def _is_ricavi(h: str) -> bool:
+    hl = h.lower()
+    return "ricavi" in hl and "ebitda" not in hl
+
+
+def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], dict[str, dict[int, int]]]:
+    """
+    Returns:
+        field_map:   field_name → column_index   (for scalar fields)
+        unmatched:   column_index → header_name  (for 'altro' JSONB)
+        fin_map:     'ebitda'/'ricavi'/'margin' → {year: col_idx}
+    """
+    header_lower = [h.lower().strip() for h in header]
+    field_map: dict[str, int] = {}
+    claimed: set[int] = set()
+
+    # ── 1. Financial columns (by year keyword) ────────────────────────────────
+    fin_map: dict[str, dict[int, int]] = {"ebitda": {}, "margin": {}, "ricavi": {}}
+    for i, h in enumerate(header):
+        ym = YEAR_RE.search(h)
+        if not ym:
+            continue
+        year = int(ym.group(1))
+        if _is_ebitda(h):
+            fin_map["ebitda"][year] = i
+            claimed.add(i)
+        elif _is_margin(h):
+            fin_map["margin"][year] = i
+            claimed.add(i)
+        elif _is_ricavi(h):
+            fin_map["ricavi"][year] = i
+            claimed.add(i)
+
+    # ── 2. Scalar fields (exact then fuzzy) ───────────────────────────────────
+    for field, variants in KNOWN_COLS.items():
+        # exact match first
+        found = False
+        for i, hl in enumerate(header_lower):
+            if i in claimed:
+                continue
+            if hl in [v.lower() for v in variants]:
+                field_map[field] = i
+                claimed.add(i)
+                found = True
+                break
+        if found:
+            continue
+        # fuzzy match
+        best_score = 0.0
+        best_idx   = None
+        for i, hl in enumerate(header_lower):
+            if i in claimed:
+                continue
+            for v in variants:
+                ratio = difflib.SequenceMatcher(None, hl, v.lower()).ratio()
+                if ratio > best_score:
+                    best_score = ratio
+                    best_idx   = i
+        if best_idx is not None and best_score >= 0.72:
+            log.info(f"  Fuzzy match: '{header[best_idx]}' → '{field}' (score={best_score:.2f})")
+            field_map[field] = best_idx
+            claimed.add(best_idx)
+
+    # ── 3. Unmatched → altro ──────────────────────────────────────────────────
+    unmatched: dict[int, str] = {
+        i: header[i] for i in range(len(header))
+        if i not in claimed and header[i].strip()
+    }
+
+    return field_map, unmatched, fin_map
+
+
+def _assign_financial_slots(fin_years: dict[int, int], row: list[str],
+                             col_names: list[str]) -> tuple[list, list, list]:
+    """Sort years desc, return (values_0_to_4, years_0_to_4, margin_values)."""
+    sorted_years = sorted(fin_years.keys(), reverse=True)
+    values = []
+    years  = []
+    for yr in sorted_years[:5]:
+        idx = fin_years[yr]
+        values.append(idx)
+        years.append(yr)
+    # pad to 5
+    while len(values) < 5:
+        values.append(None)
+        years.append(None)
+    return values, years
+
+
 # ── CSV Parsing ───────────────────────────────────────────────────────────────
 def fetch_csv(local_file: str | None = None) -> list[dict]:
     if local_file:
         log.info(f"Leggendo CSV da file locale: {local_file}")
-        with open(local_file, 'r', encoding='utf-8') as f:
+        with open(local_file, "r", encoding="utf-8") as f:
             content = f.read()
     else:
-        log.info(f"Scaricando CSV da Google Sheets…")
+        log.info("Scaricando CSV da Google Sheets…")
         resp = requests.get(CSV_URL, timeout=60)
         resp.raise_for_status()
         content = resp.text
+
     reader = csv.reader(io.StringIO(content))
-    rows = list(reader)
-    # Header row (index 0) — col indices (0-based):
-    # 0  = Progressivo (sheet_row)
-    # 1  = Ragione sociale
-    # 2  = Interesse a vendere  ← NEW (1 = interessato, blank = no)
-    # 3  = Note
-    # 4  = Contatti
-    # 5  = Next steps
-    # 6  = Partita IVA
-    # 7  = ATECO 2007 codice
-    # 8  = Sede operativa - Regione
-    # 9  = Sede operativa - Provincia
-    # 10 = Sede operativa - Comune
-    # 11 = Numero di telefono
-    # 12 = Website
-    # 13 = Data di chiusura ultimo bilancio
-    # 14 = EBITDA EUR Ultimo
-    # 15 = EBITDA EUR Anno-1
-    # 16 = EBITDA EUR Anno-2
-    # 17 = EBITDA EUR Anno-3
-    # 18 = EBITDA EUR Anno-4
-    # 19 = EBITDA/Vendite % Ultimo
-    # 20 = EBITDA/Vendite % Anno-1
-    # 21 = EBITDA/Vendite % Anno-2
-    # 22 = EBITDA/Vendite % Anno-3
-    # 23 = EBITDA/Vendite % Anno-4
-    # 24 = Ricavi EUR Ultimo
-    # 25 = Ricavi EUR Anno-1
-    # 26 = Ricavi EUR Anno-2
-    # 27 = Ricavi EUR Anno-3
-    # 28 = Ricavi EUR Anno-4
-    # 29 = Azionisti Nome
-    # 30 = CSH Nome
-    # 31 = DM Nome completo
-    # 32 = DM Codice fiscale
+    rows   = list(reader)
+    if not rows:
+        log.error("CSV vuoto!")
+        return []
 
-    # Usa dinamicamente la riga header per tollerare futuri riordini
-    header = rows[0] if rows else []
-    col_idx: dict[str, int] = {h.strip(): i for i, h in enumerate(header)}
+    header = [h.strip() for h in rows[0]]
+    log.info(f"Header rilevato: {header}")
 
-    records = []
+    field_map, unmatched_cols, fin_map = detect_columns(header)
+    log.info(f"  Campo mappati: {list(field_map.keys())}")
+    log.info(f"  EBITDA anni trovati: {sorted(fin_map['ebitda'].keys(), reverse=True)}")
+    log.info(f"  Ricavi anni trovati: {sorted(fin_map['ricavi'].keys(), reverse=True)}")
+    log.info(f"  Margin anni trovati: {sorted(fin_map['margin'].keys(), reverse=True)}")
+    if unmatched_cols:
+        log.info(f"  Colonne non mappate (→ altro): {list(unmatched_cols.values())}")
+
+    # Pre-sort financial year lists
+    ebitda_years_sorted = sorted(fin_map["ebitda"].keys(), reverse=True)[:5]
+    ricavi_years_sorted = sorted(fin_map["ricavi"].keys(), reverse=True)[:5]
+    margin_years_sorted = sorted(fin_map["margin"].keys(), reverse=True)[:5]
+
+    # Use ebitda years as canonical anno_X (fallback to ricavi)
+    canonical_years = ebitda_years_sorted or ricavi_years_sorted
+
+    def gcell(row: list[str], field: str) -> str:
+        """Get cell value for a mapped field, empty string if not mapped."""
+        idx = field_map.get(field)
+        if idx is None or idx >= len(row):
+            return ""
+        return row[idx].strip()
+
+    records  = []
     seen_slugs: set[str] = set()
 
-    def gcol(name: str, fallback: int) -> int:
-        """Trova l'indice di una colonna per nome (case-insensitive), altrimenti usa fallback."""
-        name_low = name.lower()
-        for h, i in col_idx.items():
-            if h.lower() == name_low:
-                return i
-        log.warning(f"Colonna '{name}' non trovata nel header, uso indice {fallback}")
-        return fallback
-
-    # Risolvi indici per nome (robusto a future aggiunte di colonne)
-    IDX_SHEET_ROW    = gcol("",                     0)   # colonna A senza header
-    IDX_RAGIONE      = gcol("Ragione sociale",       1)
-    IDX_INTERESSE    = gcol("Interesse a vendere",   2)
-    IDX_NOTE         = gcol("Note",                  3)
-    IDX_CONTATTI     = gcol("Contatti",              4)
-    IDX_NEXT_STEPS   = gcol("Next steps",            5)
-    IDX_PIVA         = gcol("Partita IVA",           6)
-    IDX_ATECO        = gcol("ATECO 2007 codice",     7)
-    IDX_REGIONE      = gcol("Sede operativa - Regione",   8)
-    IDX_PROVINCIA    = gcol("Sede operativa - Provincia", 9)
-    IDX_COMUNE       = gcol("Sede operativa - Comune",    10)
-    IDX_TELEFONO     = gcol("Numero di telefono",    11)
-    IDX_WEBSITE      = gcol("Website",               12)
-    IDX_DATA         = gcol("Data di chiusura ultimo bilancio", 13)
-
-    MIN_ROW_LEN = max(IDX_DATA, IDX_WEBSITE, IDX_WEBSITE) + 20  # abbondanza per colonne finanziari
-
-    for i, row in enumerate(rows[1:], start=2):  # skip header
-        # Pad row se mancano colonne
-        while len(row) < MIN_ROW_LEN:
+    for i, row in enumerate(rows[1:], start=2):
+        # Pad row if needed
+        while len(row) < len(header):
             row.append("")
 
-        ragione = row[IDX_RAGIONE].strip()
+        ragione = gcell(row, "ragione_sociale")
         if not ragione:
-            continue  # skip righe senza nome
+            continue
 
+        # Slug dedup
         base_slug = slugify(ragione)
-        slug = base_slug
-        counter = 1
+        slug      = base_slug
+        counter   = 1
         while slug in seen_slugs:
             slug = f"{base_slug}-{counter}"
             counter += 1
         seen_slugs.add(slug)
 
-        sheet_row_val  = row[IDX_SHEET_ROW].strip()
-        interesse_raw  = row[IDX_INTERESSE].strip()
-        note_val       = row[IDX_NOTE].strip()      or None
-        contatti_val   = row[IDX_CONTATTI].strip()  or None
-        next_steps_val = row[IDX_NEXT_STEPS].strip() or None
-
+        # sheet_row (first column, usually blank header)
+        sheet_row_val = row[0].strip() if row else ""
         try:
             sheet_row_int = int(float(sheet_row_val)) if sheet_row_val else None
         except ValueError:
             sheet_row_int = None
 
-        # is_interessante = 1 nella colonna "Interesse a vendere"
-        is_interessante = (interesse_raw == "1")
+        # Interest flag (column "Interesse a vendere" = 1)
+        interesse_raw    = gcell(row, "interesse")
+        is_interessante  = (interesse_raw == "1")
         livello_interesse = "chiaro" if is_interessante else None
 
-        # offset dinamico per le colonne finanziarie AIDA
-        # (le colonne AIDA iniziano subito dopo Next steps e si susseguono in ordine fisso)
-        base = IDX_NEXT_STEPS + 1   # = IDX_PIVA
+        # Esclusiva flag
+        esclusiva_raw = gcell(row, "esclusiva")
+        esclusiva     = (esclusiva_raw == "1")
+
+        # ── Financial data ────────────────────────────────────────────────────
+        def fin_val(fin_dict: dict[int, int], year: int, converter) -> any:
+            idx = fin_dict.get(year)
+            if idx is None or idx >= len(row):
+                return None
+            return converter(row[idx])
+
+        # EBITDA slots 0-4 (most recent first)
+        ebitda_vals = [fin_val(fin_map["ebitda"], yr, to_bigint)   for yr in ebitda_years_sorted] + [None]*(5-len(ebitda_years_sorted))
+        ricavi_vals = [fin_val(fin_map["ricavi"], yr, to_bigint)   for yr in ricavi_years_sorted] + [None]*(5-len(ricavi_years_sorted))
+        margin_vals = [fin_val(fin_map["margin"], yr, to_numeric)  for yr in margin_years_sorted] + [None]*(5-len(margin_years_sorted))
+
+        # anno_X = actual calendar year for slot X
+        anno_vals = list(canonical_years) + [None]*(5-len(canonical_years))
+
+        # ── Altro: unmatched columns ──────────────────────────────────────────
+        altro: dict[str, str] = {}
+        for col_idx, col_name in unmatched_cols.items():
+            if col_idx < len(row) and row[col_idx].strip():
+                altro[col_name] = row[col_idx].strip()
 
         rec = {
-            "slug":              slug,
-            "ragione_sociale":   ragione,
-            "sheet_row":         sheet_row_int,
-            "note":              note_val,
-            "contatti":          contatti_val,
-            "next_steps":        next_steps_val,
-            "is_interessante":   is_interessante,
-            "livello_interesse": livello_interesse,
-            "partita_iva":       row[IDX_PIVA].strip()      or None,
-            "ateco_codice":      row[IDX_ATECO].strip()     or None,
-            "regione":           row[IDX_REGIONE].strip()   or None,
-            "provincia":         row[IDX_PROVINCIA].strip() or None,
-            "comune":            row[IDX_COMUNE].strip()    or None,
-            "telefono":          row[IDX_TELEFONO].strip()  or None,
-            "website":           row[IDX_WEBSITE].strip()   or None,
-            "data_bilancio":     to_date(row[IDX_DATA]),
-            "ebitda_0":          to_bigint(row[IDX_DATA+1]),
-            "ebitda_1":          to_bigint(row[IDX_DATA+2]),
-            "ebitda_2":          to_bigint(row[IDX_DATA+3]),
-            "ebitda_3":          to_bigint(row[IDX_DATA+4]),
-            "ebitda_4":          to_bigint(row[IDX_DATA+5]),
-            "ebitda_margin_0":   to_numeric(row[IDX_DATA+6]),
-            "ebitda_margin_1":   to_numeric(row[IDX_DATA+7]),
-            "ebitda_margin_2":   to_numeric(row[IDX_DATA+8]),
-            "ebitda_margin_3":   to_numeric(row[IDX_DATA+9]),
-            "ebitda_margin_4":   to_numeric(row[IDX_DATA+10]),
-            "ricavi_0":          to_bigint(row[IDX_DATA+11]),
-            "ricavi_1":          to_bigint(row[IDX_DATA+12]),
-            "ricavi_2":          to_bigint(row[IDX_DATA+13]),
-            "ricavi_3":          to_bigint(row[IDX_DATA+14]),
-            "ricavi_4":          to_bigint(row[IDX_DATA+15]),
-            "azionisti":         row[IDX_DATA+16].strip() or None,
-            "csh_nome":          row[IDX_DATA+17].strip() or None,
-            "dm_nome":           row[IDX_DATA+18].strip() or None,
-            "dm_codice_fiscale": row[IDX_DATA+19].strip() or None,
+            "slug":               slug,
+            "ragione_sociale":    ragione,
+            "sheet_row":          sheet_row_int,
+            "note":               gcell(row, "note")            or None,
+            "contatti":           gcell(row, "contatti")        or None,
+            "next_steps":         gcell(row, "next_steps")      or None,
+            "is_interessante":    is_interessante,
+            "livello_interesse":  livello_interesse,
+            "esclusiva":          esclusiva,
+            "partita_iva":        gcell(row, "partita_iva")     or None,
+            "ateco_codice":       gcell(row, "ateco_codice")    or None,
+            "regione":            gcell(row, "regione")         or None,
+            "provincia":          gcell(row, "provincia")       or None,
+            "comune":             gcell(row, "comune")          or None,
+            "telefono":           gcell(row, "telefono")        or None,
+            "website":            gcell(row, "website")         or None,
+            "data_bilancio":      to_date(gcell(row, "data_bilancio")),
+            "ebitda_0":           ebitda_vals[0],
+            "ebitda_1":           ebitda_vals[1],
+            "ebitda_2":           ebitda_vals[2],
+            "ebitda_3":           ebitda_vals[3],
+            "ebitda_4":           ebitda_vals[4],
+            "ebitda_margin_0":    margin_vals[0],
+            "ebitda_margin_1":    margin_vals[1],
+            "ebitda_margin_2":    margin_vals[2],
+            "ebitda_margin_3":    margin_vals[3],
+            "ebitda_margin_4":    margin_vals[4],
+            "ricavi_0":           ricavi_vals[0],
+            "ricavi_1":           ricavi_vals[1],
+            "ricavi_2":           ricavi_vals[2],
+            "ricavi_3":           ricavi_vals[3],
+            "ricavi_4":           ricavi_vals[4],
+            "anno_0":             anno_vals[0],
+            "anno_1":             anno_vals[1],
+            "anno_2":             anno_vals[2],
+            "anno_3":             anno_vals[3],
+            "anno_4":             anno_vals[4],
+            "azionisti":          gcell(row, "azionisti")       or None,
+            "csh_nome":           gcell(row, "csh_nome")        or None,
+            "dm_nome":            gcell(row, "dm_nome")         or None,
+            "dm_codice_fiscale":  gcell(row, "dm_codice_fiscale") or None,
+            "altro":              altro if altro else None,
         }
         records.append(rec)
 
     log.info(f"Parsed {len(records)} aziende dal CSV")
+    interessanti = sum(1 for r in records if r["is_interessante"])
+    esclusive    = sum(1 for r in records if r["esclusiva"])
+    log.info(f"  → {interessanti} interessanti, {esclusive} in esclusiva")
     return records
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     import sys
     local_file = sys.argv[1] if len(sys.argv) > 1 else None
     records = fetch_csv(local_file)
-    total   = len(records)
+    total    = len(records)
     inserted = 0
     errors   = 0
 
@@ -369,11 +405,9 @@ def main():
                 errors += len(batch)
                 continue
 
-        # Aggiunge embedding a ciascun record
         for rec, emb in zip(batch, embeddings):
             rec["embedding"] = emb
 
-        # Upsert in Supabase
         try:
             supabase.table("companies").upsert(batch, on_conflict="slug").execute()
             inserted += len(batch)
