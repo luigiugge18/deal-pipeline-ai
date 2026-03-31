@@ -131,7 +131,6 @@
       display: flex; gap: 1rem; align-items: flex-start;
     }
     .result-card:hover { box-shadow: 0 4px 20px rgba(26,53,87,.16); border-color: var(--blue); }
-    .result-card.selected { border-color: var(--green); background: #F0FBF5; }
     .result-rank {
       min-width: 32px; height: 32px;
       background: var(--blue);
@@ -170,15 +169,6 @@
     .score-track { flex: 1; height: 6px; background: #E0E9F3; border-radius: 3px; overflow: hidden; }
     .score-fill  { height: 100%; background: var(--blue2); border-radius: 3px; transition: width .4s; }
 
-    /* ── Checkbox select ── */
-    .select-check {
-      width: 18px; height: 18px; flex-shrink: 0;
-      border: 2px solid #C5D5E8; border-radius: 4px;
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: background .15s, border-color .15s; margin-top: .1rem;
-    }
-    .select-check.checked { background: var(--green); border-color: var(--green); }
-    .select-check.checked::after { content: '✓'; color: #fff; font-size: .75rem; font-weight: 700; }
 
     /* ── Company Sheet ── */
     #sheet-content { display: none; }
@@ -227,16 +217,6 @@
     .alert-error { background: #FEE; color: #B00; border: 1px solid #F5C5C5; }
     .alert-info  { background: var(--blue-xlt); color: var(--blue); border: 1px solid var(--blue-light); }
 
-    /* ── Export bar ── */
-    #export-bar {
-      position: fixed; bottom: 1.5rem; right: 2rem;
-      background: var(--white); border-radius: 10px;
-      box-shadow: 0 4px 24px rgba(0,0,0,.18);
-      padding: .8rem 1.2rem; display: flex; align-items: center; gap: 1rem;
-      z-index: 200; display: none;
-    }
-    #export-bar.show { display: flex; }
-    .export-count { font-weight: 700; color: var(--blue); }
   </style>
 </head>
 <body>
@@ -330,14 +310,6 @@
 </div>
 
 
-<!-- ── EXPORT BAR ── -->
-<div id="export-bar">
-  <span>📦 <span class="export-count" id="sel-count">0</span> aziende selezionate</span>
-  <input type="text" id="buyer-name-inp" placeholder="Nome buyer" style="border:1.5px solid #ccd5e0;border-radius:5px;padding:.35rem .7rem;font-size:.88rem;width:160px" />
-  <button class="btn btn-green btn-sm" onclick="exportList('pdf')">⬇ PDF</button>
-  <button class="btn btn-outline btn-sm" onclick="exportList('excel')">📊 Excel</button>
-  <button class="btn btn-sm" style="background:#eee;color:#555" onclick="clearSelection()">✕</button>
-</div>
 
 
 <script>
@@ -365,8 +337,6 @@ function showPage(id) {
 // ─────────────────────────────────────────────────────────────────
 // Ricerca
 // ─────────────────────────────────────────────────────────────────
-let selectedSlugs = new Set();
-
 async function doSearch() {
   const area = document.getElementById('results-area');
   area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Ricerca in corso…</div>`;
@@ -411,12 +381,10 @@ function renderResults(data, query) {
         ${query ? `per "<em>${query}</em>"` : ''}
         <span style="color:#aaa;margin-left:.5rem">(${data.query_time}s)</span>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="selectAll()">☑ Seleziona tutti</button>
     </div>`;
 
   const cards = data.results.map((c, i) => buildResultCard(c, i + 1)).join('');
   area.innerHTML = hdr + cards;
-  updateExportBar();
 }
 
 function buildResultCard(c, rank) {
@@ -427,11 +395,9 @@ function buildResultCard(c, rank) {
       <div class="score-track"><div class="score-fill" style="width:${Math.round(c.score*100)}%"></div></div>
     </div>` : '';
   const expl = c.match_explanation ? `<div class="result-explanation">🤖 ${c.match_explanation}</div>` : '';
-  const isSelected = selectedSlugs.has(c.slug);
 
   return `
-    <div class="result-card ${isSelected ? 'selected' : ''}" id="card-${c.slug}" onclick="toggleSelect('${c.slug}', event)">
-      <div class="select-check ${isSelected ? 'checked' : ''}" id="chk-${c.slug}"></div>
+    <div class="result-card" id="card-${c.slug}">
       <div class="result-rank">${rank}</div>
       <div class="result-body">
         <div class="result-name">${c.ragione_sociale}</div>
@@ -452,81 +418,11 @@ function buildResultCard(c, rank) {
     </div>`;
 }
 
-function toggleSelect(slug, evt) {
-  if (evt.target.tagName === 'BUTTON') return;
-  if (selectedSlugs.has(slug)) {
-    selectedSlugs.delete(slug);
-    document.getElementById(`card-${slug}`)?.classList.remove('selected');
-    const chk = document.getElementById(`chk-${slug}`);
-    if (chk) chk.classList.remove('checked');
-  } else {
-    selectedSlugs.add(slug);
-    document.getElementById(`card-${slug}`)?.classList.add('selected');
-    const chk = document.getElementById(`chk-${slug}`);
-    if (chk) chk.classList.add('checked');
-  }
-  updateExportBar();
-}
-
-function selectAll() {
-  document.querySelectorAll('.result-card').forEach(card => {
-    const slug = card.id.replace('card-', '');
-    selectedSlugs.add(slug);
-    card.classList.add('selected');
-    document.getElementById(`chk-${slug}`)?.classList.add('checked');
-  });
-  updateExportBar();
-}
-
-function clearSelection() {
-  selectedSlugs.clear();
-  document.querySelectorAll('.result-card').forEach(c => c.classList.remove('selected'));
-  document.querySelectorAll('.select-check').forEach(c => c.classList.remove('checked'));
-  updateExportBar();
-}
-
-function updateExportBar() {
-  const bar = document.getElementById('export-bar');
-  document.getElementById('sel-count').textContent = selectedSlugs.size;
-  bar.classList.toggle('show', selectedSlugs.size > 0);
-}
-
 function clearSearch() {
   ['q-text','q-rev-min','q-rev-max','q-ebitda','q-geo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('q-sector').value = '';
   document.getElementById('results-area').innerHTML = '';
-  clearSelection();
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Export
-// ─────────────────────────────────────────────────────────────────
-async function exportList(format) {
-  if (!selectedSlugs.size) return;
-  const buyerName = document.getElementById('buyer-name-inp').value.trim();
-
-  try {
-    const resp = await fetch(`${API}/export/${format}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        company_slugs: [...selectedSlugs],
-        buyer_name: buyerName || null,
-        format,
-      }),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
-    a.href = url;
-    a.download = `shortlist_${new Date().toISOString().slice(0,10)}.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch(e) {
-    alert(`Errore export: ${e.message}`);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -590,7 +486,6 @@ function renderSheet(c) {
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
           </div>
         </div>
-        <button class="btn btn-green btn-sm" onclick="selectedSlugs.add('${c.slug}'); updateExportBar();">+ Aggiungi a shortlist</button>
       </div>
 
       <div class="tabs-bar">
