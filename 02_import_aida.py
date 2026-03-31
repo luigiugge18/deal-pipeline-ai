@@ -90,19 +90,27 @@ NEGATIVE_NOTE_PATTERNS = [
     "già in contatto con bravo",
 ]
 
-def compute_is_interessante(note: str | None) -> bool:
+def compute_is_interessante(note: str | None, next_steps: str | None = None) -> bool:
     """
-    Whitelist approach: TRUE per default (aziende non ancora contattate o con note
-    di apertura). FALSE solo se la nota contiene segnali espliciti di non-interesse
-    o esclusione.
+    Strict whitelist: TRUE solo se c'è una nota (o next_steps) con segnali di
+    apertura/interesse. Aziende senza note = non contattate = FALSE.
     """
-    if not note or not note.strip():
-        return True  # non contattata = potenziale target
-    note_lower = note.lower()
-    for pattern in NEGATIVE_NOTE_PATTERNS:
-        if pattern in note_lower:
-            return False
-    return True  # openness semantica: tutto il resto è "interessante"
+    has_note       = bool(note and note.strip())
+    has_next_steps = bool(next_steps and next_steps.strip())
+
+    # Nessuna informazione → non sappiamo nulla → escludi
+    if not has_note and not has_next_steps:
+        return False
+
+    # Se c'è una nota, controlla che non contenga segnali negativi
+    if has_note:
+        note_lower = note.lower()
+        for pattern in NEGATIVE_NOTE_PATTERNS:
+            if pattern in note_lower:
+                return False
+
+    # Ha qualcosa di scritto (nota o next_steps) senza segnali negativi → includi
+    return True
 
 
 def build_embedding_text(row: dict) -> str:
@@ -212,7 +220,7 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
             "note":             note_val,
             "contatti":         contatti_val,
             "next_steps":       next_steps_val,
-            "is_interessante":  compute_is_interessante(note_val),
+            "is_interessante":  compute_is_interessante(note_val, next_steps_val),
             "partita_iva":      row[5].strip() or None,
             "ateco_codice":     row[6].strip() or None,
             "regione":          row[7].strip() or None,
