@@ -492,7 +492,12 @@ def main():
     if local_file:
         # Singolo file locale: usa source_sheet dal nome del file (o "aida" di default)
         fname = os.path.basename(local_file).lower().replace(".csv", "")
-        source = next((s["name"] for s in SHEETS if s["name"] in fname), "aida")
+        # Match: controlla se il nome chiave O la prima parola del nome è nel filename
+        def _matches(sheet_name, fname):
+            if sheet_name in fname: return True
+            first_word = sheet_name.split('-')[0]  # es. "koinos" da "koinos-ingegneria"
+            return len(first_word) >= 4 and first_word in fname
+        source = next((s["name"] for s in SHEETS if _matches(s["name"], fname)), "spurghi")
         records = fetch_csv(local_file, source_sheet=source)
         inserted, errors = _run_import(records)
         log.info(f"\n=== {source.upper()} COMPLETATO: {inserted} inseriti, {errors} errori ===")
