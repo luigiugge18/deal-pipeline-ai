@@ -504,7 +504,11 @@ function buildResultCard(c, rank) {
     <div class="result-card${isEsclusiva ? ' esclusiva' : ''}" id="card-${c.slug}">
       <div class="result-rank">${rank}</div>
       <div class="result-body">
-        <div class="result-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
+        <div class="result-name${isEsclusiva ? ' esclusiva' : ''}">
+          ${!isEsclusiva
+            ? `<a href="#" onclick="openSheet('${c.slug}',event);return false;" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${name}</a>`
+            : name}
+        </div>
         <div class="result-meta">
           ${c.ateco_codice ? `<span class="badge badge-sector">ATECO ${c.ateco_codice}</span>` : ''}
           ${c.regione ? `<span class="badge badge-geo">📍 ${c.regione}${c.provincia ? ' · ' + c.provincia : ''}</span>` : ''}
@@ -677,7 +681,9 @@ function renderSheet(c) {
     <div class="card">
       <div class="sheet-header">
         <div>
-          <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
+          <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">
+            ${(() => { const sl = sheetLink(c); const m = sl.match(/href="([^"]+)"/); return (!isEsclusiva && m) ? `<a href="${m[1]}" target="_blank" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Apri in Google Sheet">${name}</a>` : name; })()}
+          </div>
           <div class="sheet-sub">
             ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
             ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
