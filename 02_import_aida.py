@@ -36,7 +36,11 @@ CSV_URL   = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=cs
 SHEETS: list[dict] = [
     {"name": "spurghi",           "sheet_id": "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48", "gid": "1243837551"},
     {"name": "campagna",          "sheet_id": "1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU", "gid": "0"},
-    {"name": "koinos-ingegneria", "sheet_id": "1v9WjjhgzVEUOpu_ldr-lT7BqcB196pjBc2RJMxL8ytg", "gid": "1970091735"},
+    # NOTA: usare tab LISTA (gid 1936665626), NON le altre tab del foglio Koinos
+    # La tab LISTA ha valori finanziari come interi (euro interi, NON in milioni)
+    # gid 1970091735 = tab "1" (sbagliata, ha valori in €M)
+    # gid 1936665626 = tab "Lista" (corretta, formato AIDA con euro interi)
+    {"name": "koinos-ingegneria", "sheet_id": "1v9WjjhgzVEUOpu_ldr-lT7BqcB196pjBc2RJMxL8ytg", "gid": "1936665626"},
 ]
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -59,7 +63,7 @@ def slugify(text: str) -> str:
     return text.strip("-")[:120]
 
 def to_bigint(val: str) -> int | None:
-    """Converte stringa in intero.
+    """Converte stringa in intero (valori in euro interi).
     Gestisce sia formato italiano ("3.213.227") sia US ("669,553"):
     per i numeri interi (EBITDA, Ricavi) sia punto che virgola sono
     separatori delle migliaia → si rimuovono entrambi.
@@ -69,6 +73,31 @@ def to_bigint(val: str) -> int | None:
     try:
         cleaned = val.strip().replace(".", "").replace(",", "")
         return int(float(cleaned))
+    except Exception:
+        return None
+
+def to_bigint_m(val: str) -> int | None:
+    """Converte stringa in intero per valori espressi in milioni di euro.
+    Es: "1,3" → 1.300.000 (virgola = decimale italiano)
+        "23"  → 23.000.000
+        "0,4" → 400.000
+    """
+    if not val or val.strip() == "":
+        return None
+    try:
+        # Sostituisce la virgola decimale italiana con punto
+        cleaned = val.strip().replace(".", "").replace(",", ".")
+        return int(float(cleaned) * 1_000_000)
+    except Exception:
+        return None
+
+def to_percent(val: str) -> float | None:
+    """Converte stringa percentuale in float. Es: "29%" → 29.0, "21,3%" → 21.3"""
+    if not val or val.strip() == "":
+        return None
+    try:
+        cleaned = val.strip().rstrip("%").replace(",", ".")
+        return float(cleaned)
     except Exception:
         return None
 
@@ -158,11 +187,12 @@ def _is_ebitda(h: str) -> bool:
 
 def _is_margin(h: str) -> bool:
     hl = h.lower()
-    return ("ebitda" in hl and ("%" in hl or "vendite" in hl)) or "margine" in hl
+    return ("ebitda" in hl and ("%" in hl or "vendite" in hl)) or "margine" in hl or (
+        "margin" in hl and "ebitda" not in hl)
 
 def _is_ricavi(h: str) -> bool:
     hl = h.lower()
-    return "ricavi" in hl and "ebitda" not in hl
+    return ("ricavi" in hl or "sales" in hl or "fatturato" in hl) and "ebitda" not in hl and "margin" not in hl
 
 
 def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], dict[str, dict[int, int]]]:
@@ -176,21 +206,20 @@ def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], d
     field_map: dict[str, int] = {}
     claimed: set[int] = set()
 
-    # ── 1. Financial columns (by year keyword) ────────────────────────────────
+    # ── 1. Financial columns (by year keyword, or default year if no year in header) ───
     fin_map: dict[str, dict[int, int]] = {"ebitda": {}, "margin": {}, "ricavi": {}}
+    DEFAULT_FIN_YEAR = 2024  # usato quando la colonna non contiene un anno esplicito
     for i, h in enumerate(header):
         ym = YEAR_RE.search(h)
-        if not ym:
-            continue
-        year = int(ym.group(1))
+        year = int(ym.group(1)) if ym else None
         if _is_ebitda(h):
-            fin_map["ebitda"][year] = i
+            fin_map["ebitda"][year or DEFAULT_FIN_YEAR] = i
             claimed.add(i)
         elif _is_margin(h):
-            fin_map["margin"][year] = i
+            fin_map["margin"][year or DEFAULT_FIN_YEAR] = i
             claimed.add(i)
         elif _is_ricavi(h):
-            fin_map["ricavi"][year] = i
+            fin_map["ricavi"][year or DEFAULT_FIN_YEAR] = i
             claimed.add(i)
 
     # ── 2. Scalar fields (exact then fuzzy) ───────────────────────────────────
@@ -261,7 +290,7 @@ def _assign_financial_slots(fin_years: dict[int, int], row: list[str],
 
 
 # ── CSV Parsing ───────────────────────────────────────────────────────────────
-def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_url: str | None = None) -> list[dict]:
+def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_url: str | None = None, fin_unit: str = "eur") -> list[dict]:
     if local_file:
         log.info(f"Leggendo CSV da file locale: {local_file} (source_sheet={source_sheet})")
         with open(local_file, "r", encoding="utf-8") as f:
@@ -350,10 +379,16 @@ def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_u
                 return None
             return converter(row[idx])
 
+        # Scegli converter in base all'unità del foglio
+        # fin_unit="M": valori in milioni (es. fogli con colonne "Sales (€M)")
+        # fin_unit="eur" (default): valori in euro interi (AIDA, LISTA Koinos, ecc.)
+        _fin_conv  = to_bigint_m if fin_unit == "M" else to_bigint
+        _marg_conv = to_percent  if fin_unit == "M" else to_numeric
+
         # EBITDA slots 0-4 (most recent first)
-        ebitda_vals = [fin_val(fin_map["ebitda"], yr, to_bigint)   for yr in ebitda_years_sorted] + [None]*(5-len(ebitda_years_sorted))
-        ricavi_vals = [fin_val(fin_map["ricavi"], yr, to_bigint)   for yr in ricavi_years_sorted] + [None]*(5-len(ricavi_years_sorted))
-        margin_vals = [fin_val(fin_map["margin"], yr, to_numeric)  for yr in margin_years_sorted] + [None]*(5-len(margin_years_sorted))
+        ebitda_vals = [fin_val(fin_map["ebitda"], yr, _fin_conv)   for yr in ebitda_years_sorted] + [None]*(5-len(ebitda_years_sorted))
+        ricavi_vals = [fin_val(fin_map["ricavi"], yr, _fin_conv)   for yr in ricavi_years_sorted] + [None]*(5-len(ricavi_years_sorted))
+        margin_vals = [fin_val(fin_map["margin"], yr, _marg_conv)  for yr in margin_years_sorted] + [None]*(5-len(margin_years_sorted))
 
         # anno_X = actual calendar year for slot X
         anno_vals = list(canonical_years) + [None]*(5-len(canonical_years))
@@ -461,7 +496,10 @@ def _run_import(records: list[dict]) -> tuple[int, int]:
                 if piva:
                     existing = supabase.table("companies").select("id").eq("partita_iva", piva).execute()
                     if existing.data:
-                        supabase.table("companies").update(rec).eq("partita_iva", piva).execute()
+                        # Solo i campi non-None, per non sovrascrivere dati finanziari
+                        # già presenti con null (es. campagna non ha ricavi/EBITDA)
+                        rec_update = {k: v for k, v in rec.items() if v is not None}
+                        supabase.table("companies").update(rec_update).eq("partita_iva", piva).execute()
                     else:
                         supabase.table("companies").insert(rec).execute()
                 else:
