@@ -592,6 +592,10 @@ function renderSheet(c) {
       </div>
 
       <div id="tab-financials" class="tab-pane active">
+        ${(c.altro && c.altro.descrizione_web) ? `
+        <div style="background:#F0FDF4;border-left:3px solid #22C55E;padding:.75rem 1rem;border-radius:0 6px 6px 0;margin-bottom:1rem;font-size:.9rem;color:#166534;line-height:1.55">
+          ${c.altro.descrizione_web}
+        </div>` : ''}
         <div class="kpi-grid">${kpis.map(k=>`
           <div class="kpi-card">
             <div class="kpi-label">${k.label}</div>
