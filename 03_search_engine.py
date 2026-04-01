@@ -79,7 +79,7 @@ def search_structured(
     q = sb.table('companies').select(
         'id, ragione_sociale, slug, ateco_codice, regione, provincia, comune, '
         'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, last_updated, '
-        'note, contatti, next_steps, sheet_row, is_interessante'
+        'note, contatti, next_steps, sheet_row, is_interessante, esclusiva, altro'
     )
     if ateco_codici:
         q = q.in_('ateco_codice', ateco_codici)
@@ -169,6 +169,29 @@ def search(
     if explain and query_text and results:
         results = _add_explanations(query_text, results[:5])
 
+    # Arricchisce i risultati con `altro` e `esclusiva` (non restituiti dalla RPC)
+    results = _enrich_altro(results)
+
+    return results
+
+
+def _enrich_altro(results: list[dict]) -> list[dict]:
+    """Aggiunge `altro` e `esclusiva` ai risultati che ne sono privi (es. dalla RPC match_companies)."""
+    if not results:
+        return results
+    missing = [r for r in results if 'altro' not in r or 'esclusiva' not in r]
+    if not missing:
+        return results
+    ids = [r['id'] for r in missing if r.get('id')]
+    if not ids:
+        return results
+    sb = _get_supabase()
+    resp = sb.table('companies').select('id, altro, esclusiva').in_('id', ids).execute()
+    extra = {row['id']: row for row in (resp.data or [])}
+    for r in results:
+        if r.get('id') in extra:
+            r.setdefault('altro', extra[r['id']].get('altro'))
+            r.setdefault('esclusiva', extra[r['id']].get('esclusiva'))
     return results
 
 

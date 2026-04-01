@@ -139,6 +139,8 @@ RETURNS TABLE (
     sheet_row          INT,
     is_interessante    BOOLEAN,
     livello_interesse  TEXT,
+    esclusiva          BOOLEAN,
+    altro              JSONB,
     score              FLOAT
 )
 LANGUAGE sql STABLE
@@ -162,6 +164,8 @@ AS $func$
         c.sheet_row,
         c.is_interessante,
         c.livello_interesse,
+        c.esclusiva,
+        c.altro,
         1 - (c.embedding <=> query_embedding) AS score
     FROM companies c
     WHERE
