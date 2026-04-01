@@ -347,30 +347,29 @@ const SHEET_REGISTRY = {
 };
 
 function sheetLink(c) {
-  if (c.sheet_row == null) return '';
   const altro = c.altro || {};
 
   // 1. Usa source_sheet salvato in altro (dall'import) o fallback detection
   const src = (c.source_sheet || altro['source_sheet'] || '').toLowerCase().replace(/\s+/g, '-');
 
   // 2. Fallback: detect da chiavi in altro (per record vecchi senza source_sheet)
-  let key = src || (
+  const key = src || (
     (altro['Business'] || altro['Tier'] || altro['Interesse a vendere'] || altro['Hotel stelle'])
       ? 'campagna'
       : 'spurghi'
   );
 
   const sheet = SHEET_REGISTRY[key];
-  if (!sheet || !sheet.url) {
-    // URL non ancora configurato — mostra solo riga e nome
-    return `&nbsp;<span style="font-size:.82rem;color:#9CA3AF" title="Sheet: ${key}">📊 Riga ${c.sheet_row} · ${sheet ? sheet.label : key}</span>`;
-  }
+  if (!sheet || !sheet.url) return '';
 
-  const urlWithRow = sheet.gid
+  // Link al foglio (con riga specifica se disponibile, altrimenti root)
+  const url = (c.sheet_row && sheet.gid)
     ? `${sheet.url}?gid=${sheet.gid}#gid=${sheet.gid}&range=A${c.sheet_row}`
-    : `${sheet.url}#gid=0&range=A${c.sheet_row}`;
+    : sheet.gid
+      ? `${sheet.url}?gid=${sheet.gid}`
+      : sheet.url;
 
-  return `&nbsp;<a href="${urlWithRow}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none" title="Apri riga ${c.sheet_row} nel Google Sheet (${sheet.label})">📊 Riga ${c.sheet_row} · ${sheet.label}</a>`;
+  return `<a href="${url}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none;white-space:nowrap" title="Apri in Google Sheet (${sheet.label})">📊 ${sheet.label}</a>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -515,7 +514,10 @@ function buildResultCard(c, rank) {
           ${interestBadge}
           ${esclusivaBadge}
         </div>
-        ${c.website && !isEsclusiva ? `<div style="font-size:.82rem;margin:.3rem 0 .1rem;color:#4B5563">🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a></div>` : ''}
+        ${!isEsclusiva ? `<div style="font-size:.82rem;margin:.3rem 0 .1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+          ${c.website ? `🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a>` : ''}
+          ${sheetLink(c)}
+        </div>` : ''}
         ${finHtml}
         ${scoreHtml}${expl}
         ${scheda}
@@ -681,9 +683,7 @@ function renderSheet(c) {
     <div class="card">
       <div class="sheet-header">
         <div>
-          <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">
-            ${(() => { const sl = sheetLink(c); const m = sl.match(/href="([^"]+)"/); return (!isEsclusiva && m) ? `<a href="${m[1]}" target="_blank" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Apri in Google Sheet">${name}</a>` : name; })()}
-          </div>
+          <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
           <div class="sheet-sub">
             ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
             ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
