@@ -92,6 +92,7 @@ class CompanyResult(BaseModel):
     is_interessante:   Optional[bool] = None
     livello_interesse: Optional[str]  = None
     esclusiva:         Optional[bool] = None
+    altro:             Optional[dict] = None
     anno_0:            Optional[int]  = None
     anno_1:            Optional[int]  = None
     anno_2:            Optional[int]  = None
