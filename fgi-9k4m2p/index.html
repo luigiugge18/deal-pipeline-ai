@@ -339,6 +339,23 @@ function yearLabel(c, slot) {
   return c[`anno_${slot}`] ? String(c[`anno_${slot}`]) : '';
 }
 
+// Google Sheet link — detects AIDA vs campagna by altro keys
+function sheetLink(c) {
+  if (c.sheet_row == null) return '';
+  const altro = c.altro || {};
+  const isCampagna = !!(altro['Business'] || altro['Tier'] || altro['Interesse a vendere'] || altro['Hotel stelle']);
+  let url;
+  if (isCampagna) {
+    // Campagna sheet — link to specific row
+    url = `https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit#gid=0&range=A${c.sheet_row}`;
+  } else {
+    // AIDA sheet — link to specific row
+    url = `https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551#gid=1243837551&range=A${c.sheet_row}`;
+  }
+  const label = isCampagna ? 'Campagna' : 'AIDA';
+  return `&nbsp;<a href="${url}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none" title="Apri riga ${c.sheet_row} nel Google Sheet (${label})">📊 Riga ${c.sheet_row} · ${label}</a>`;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Load ATECO options
 // ─────────────────────────────────────────────────────────────────
@@ -624,7 +641,7 @@ function renderSheet(c) {
         ${c.partita_iva ? `<strong>P.IVA:</strong> ${c.partita_iva} &nbsp;` : ''}
         ${c.website ? `<strong>Web:</strong> <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank">${c.website}</a> &nbsp;` : ''}
         ${c.telefono ? `<strong>Tel:</strong> ${c.telefono}` : ''}
-        ${c.sheet_row != null ? `&nbsp; <a href="https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551" target="_blank" style="font-size:.85rem">📊 Apri in Google Sheet</a>` : ''}
+        ${sheetLink(c)}
       </div>
       ${c.dm_nome ? `<div class="alert alert-info" style="margin-top:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
       ${c.azionisti ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
@@ -642,6 +659,7 @@ function renderSheet(c) {
             ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
             ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
+            ${sheetLink(c)}
           </div>
           <div style="margin-top:.4rem">${interestBadge}${esclusivaBadge}</div>
         </div>
