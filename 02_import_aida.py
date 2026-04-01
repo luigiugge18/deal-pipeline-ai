@@ -421,7 +421,20 @@ def main():
             rec["embedding"] = emb
 
         try:
-            supabase.table("companies").upsert(batch, on_conflict="slug").execute()
+            for rec in batch:
+                piva = rec.get("partita_iva")
+                if piva:
+                    # Cerca record esistente per P.IVA
+                    existing = supabase.table("companies").select("id").eq("partita_iva", piva).execute()
+                    if existing.data:
+                        # Update
+                        supabase.table("companies").update(rec).eq("partita_iva", piva).execute()
+                    else:
+                        # Insert
+                        supabase.table("companies").insert(rec).execute()
+                else:
+                    # Fallback su slug
+                    supabase.table("companies").upsert(rec, on_conflict="slug").execute()
             inserted += len(batch)
             log.info(f"  ✓ {inserted}/{total} inseriti")
         except Exception as e:
