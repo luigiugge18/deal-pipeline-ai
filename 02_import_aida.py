@@ -51,10 +51,16 @@ def slugify(text: str) -> str:
     return text.strip("-")[:120]
 
 def to_bigint(val: str) -> int | None:
+    """Converte stringa in intero.
+    Gestisce sia formato italiano ("3.213.227") sia US ("669,553"):
+    per i numeri interi (EBITDA, Ricavi) sia punto che virgola sono
+    separatori delle migliaia → si rimuovono entrambi.
+    """
     if not val or val.strip() == "":
         return None
     try:
-        return int(float(val.replace(".", "").replace(",", ".")))
+        cleaned = val.strip().replace(".", "").replace(",", "")
+        return int(float(cleaned))
     except Exception:
         return None
 
@@ -430,26 +436,33 @@ def main():
         for rec, emb in zip(batch, embeddings):
             rec["embedding"] = emb
 
-        try:
-            for rec in batch:
+        batch_ok = 0
+        for rec in batch:
+            try:
                 piva = rec.get("partita_iva")
                 if piva:
-                    # Cerca record esistente per P.IVA
                     existing = supabase.table("companies").select("id").eq("partita_iva", piva).execute()
                     if existing.data:
-                        # Update
                         supabase.table("companies").update(rec).eq("partita_iva", piva).execute()
                     else:
-                        # Insert
                         supabase.table("companies").insert(rec).execute()
                 else:
-                    # Fallback su slug
-                    supabase.table("companies").upsert(rec, on_conflict="slug").execute()
-            inserted += len(batch)
-            log.info(f"  ✓ {inserted}/{total} inseriti")
-        except Exception as e:
-            log.error(f"Upsert fallito per batch {start}: {e}")
-            errors += len(batch)
+                    # Fallback: cerca per ragione_sociale (case-insensitive)
+                    existing = supabase.table("companies").select("id").ilike(
+                        "ragione_sociale", rec["ragione_sociale"]).execute()
+                    if existing.data:
+                        # Aggiorna senza toccare lo slug (per evitare conflitti unique)
+                        rec_update = {k: v for k, v in rec.items() if k != "slug"}
+                        supabase.table("companies").update(rec_update).eq(
+                            "id", existing.data[0]["id"]).execute()
+                    else:
+                        supabase.table("companies").insert(rec).execute()
+                batch_ok += 1
+            except Exception as e:
+                log.warning(f"  Skip '{rec.get('ragione_sociale','?')}': {e}")
+                errors += 1
+        inserted += batch_ok
+        log.info(f"  ✓ {inserted}/{total} inseriti")
 
         time.sleep(EMBED_DELAY_S)
 
