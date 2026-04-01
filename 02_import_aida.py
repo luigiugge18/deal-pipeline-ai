@@ -104,7 +104,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
 # Canonical column name → list of accepted variants (lowercase)
 KNOWN_COLS: dict[str, list[str]] = {
     "ragione_sociale":    ["ragione sociale", "ragione soc", "nome azienda", "company"],
-    "interesse":          ["interesse a vendere", "interesse vendere", "interesse"],
+    "interesse":          ["interesse a vendere", "interesse vendere", "interesse", "potential sell-side", "potential sell"],
     "note":               ["note", "notes", "annotazioni"],
     "contatti":           ["contatti", "contatto", "contacts"],
     "next_steps":         ["next steps", "next step", "prossimi passi", "azioni"],
@@ -308,9 +308,9 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
         except ValueError:
             sheet_row_int = None
 
-        # Interest flag (column "Interesse a vendere" = 1)
+        # Interest flag: "1" (AIDA sheet) oppure "Si"/"Sì" (campagna sheet)
         interesse_raw    = gcell(row, "interesse")
-        is_interessante  = (interesse_raw == "1")
+        is_interessante  = interesse_raw.strip().lower() in ("1", "si", "sì")
         livello_interesse = "chiaro" if is_interessante else None
 
         # Esclusiva flag
