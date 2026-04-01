@@ -342,10 +342,9 @@ function yearLabel(c, slot) {
 // Google Sheet source registry — aggiornare con i link reali
 const SHEET_REGISTRY = {
   // 'nome_chiave': { label: 'Label visibile', url: 'https://...', gid: null }
-  'aida':           { label: 'AIDA',        url: 'https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit', gid: '1243837551' },
+  'spurghi':        { label: 'Spurghi',     url: 'https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit', gid: '1243837551' },
   'campagna':       { label: 'Campagna',    url: 'https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit', gid: null },
-  'spurghi':        { label: 'Spurghi',     url: null, gid: null },   // ← inserire URL
-  'r&d-ingegneria': { label: 'R&D Ing.',    url: null, gid: null },   // ← inserire URL
+  'r&d-ingegneria': { label: 'R&D Ing.',    url: null, gid: null },   // ← inserire URL quando disponibile
 };
 
 function sheetLink(c) {
@@ -359,7 +358,7 @@ function sheetLink(c) {
   let key = src || (
     (altro['Business'] || altro['Tier'] || altro['Interesse a vendere'] || altro['Hotel stelle'])
       ? 'campagna'
-      : 'aida'
+      : 'spurghi'
   );
 
   const sheet = SHEET_REGISTRY[key];
