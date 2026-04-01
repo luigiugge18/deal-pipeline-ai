@@ -338,6 +338,16 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
             if col_idx < len(row) and row[col_idx].strip():
                 altro[col_name] = row[col_idx].strip()
 
+        # Fallback: se "Interesse a vendere" è finito in altro per problemi di parsing,
+        # lo cattura comunque per impostare is_interessante correttamente
+        if not is_interessante:
+            for k, v in altro.items():
+                if "interesse" in k.lower() and "vendere" in k.lower():
+                    if v.strip().lower() in ("1", "si", "sì"):
+                        is_interessante = True
+                        livello_interesse = "chiaro"
+                        break
+
         rec = {
             "slug":               slug,
             "ragione_sociale":    ragione,

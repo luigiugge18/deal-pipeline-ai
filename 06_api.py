@@ -19,6 +19,7 @@ Documentazione interattiva:
 
 from __future__ import annotations
 import os
+import re
 import logging
 from datetime import datetime
 from typing import Optional
@@ -144,6 +145,43 @@ async def search_endpoint(req: SearchRequest):
         query_time=round(time.time() - t0, 3),
         query_used=req.query,
     )
+
+
+# =============================================================================
+# Endpoint: /lookup  (ricerca per nome o P.IVA, senza filtro is_interessante)
+# =============================================================================
+
+@app.get('/lookup', tags=['Aziende'])
+async def lookup_company(q: str):
+    """
+    Cerca un'azienda per ragione sociale (ILIKE) o P.IVA (exact).
+    Non filtra per is_interessante — restituisce tutte le aziende nel DB.
+    """
+    from supabase import create_client
+    sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+
+    q_clean = q.strip()
+
+    # Prima prova: P.IVA esatta (solo cifre)
+    if re.fullmatch(r'\d{11}', q_clean):
+        resp = sb.table('companies').select(
+            'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
+            'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, is_interessante, livello_interesse, '
+            'note, contatti, next_steps, anno_0'
+        ).eq('partita_iva', q_clean).execute()
+    else:
+        # Ricerca per nome (case-insensitive)
+        resp = sb.table('companies').select(
+            'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
+            'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, is_interessante, livello_interesse, '
+            'note, contatti, next_steps, anno_0'
+        ).ilike('ragione_sociale', f'%{q_clean}%').limit(20).execute()
+
+    results = resp.data or []
+    # Rimuovi embedding se presente
+    for r in results:
+        r.pop('embedding', None)
+    return {'results': results, 'count': len(results), 'query': q_clean}
 
 
 # =============================================================================

@@ -298,11 +298,13 @@
   <div class="card">
     <div style="display:flex;gap:.75rem;align-items:center;">
       <div class="form-group" style="flex:1">
-        <label>Slug azienda</label>
-        <input type="text" id="slug-input" placeholder="es. mario-rossi-srl" onkeydown="if(event.key==='Enter')loadSheet()" />
+        <label>Cerca per nome o P.IVA</label>
+        <input type="text" id="slug-input" placeholder="es. Hotel Ariston  oppure  00670750223"
+               onkeydown="if(event.key==='Enter')loadSheet()" />
       </div>
-      <button class="btn btn-primary" onclick="loadSheet()" style="margin-top:1.3rem">Carica</button>
+      <button class="btn btn-primary" onclick="loadSheet()" style="margin-top:1.3rem">Cerca</button>
     </div>
+    <div id="lookup-results" style="display:none;margin-top:.75rem"></div>
   </div>
   <div id="sheet-content"></div>
 </div>
@@ -500,20 +502,60 @@ function openSheet(slug, evt) {
   loadSheet();
 }
 
-async function loadSheet() {
-  const slug = document.getElementById('slug-input').value.trim();
-  if (!slug) return;
-  const area = document.getElementById('sheet-content');
+async function loadSheet(slugDirect) {
+  const input = slugDirect || document.getElementById('slug-input').value.trim();
+  if (!input) return;
+
+  const area    = document.getElementById('sheet-content');
+  const lookDiv = document.getElementById('lookup-results');
   area.style.display = 'block';
+  lookDiv.style.display = 'none';
+  lookDiv.innerHTML = '';
   area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Caricamento scheda…</div>`;
 
-  try {
-    const resp = await fetch(`${API}/company/${encodeURIComponent(slug)}`);
-    if (!resp.ok) throw new Error(resp.status === 404 ? 'Azienda non trovata' : `HTTP ${resp.status}`);
-    const c = await resp.json();
-    renderSheet(c);
-  } catch(e) {
-    area.innerHTML = `<div class="alert alert-error">Errore: ${e.message}</div>`;
+  // Se è uno slug (niente spazi, solo lettere/trattini) → carica diretto
+  const isSlug = /^[a-z0-9-]+$/.test(input);
+
+  if (isSlug) {
+    // Caricamento diretto per slug
+    try {
+      const resp = await fetch(`${API}/company/${encodeURIComponent(input)}`);
+      if (!resp.ok) throw new Error(resp.status === 404 ? 'Azienda non trovata' : `HTTP ${resp.status}`);
+      const c = await resp.json();
+      renderSheet(c);
+    } catch(e) {
+      area.innerHTML = `<div class="alert alert-error">Errore: ${e.message}</div>`;
+    }
+  } else {
+    // Ricerca per nome o P.IVA via /lookup
+    try {
+      area.innerHTML = '';
+      const resp = await fetch(`${API}/lookup?q=${encodeURIComponent(input)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+
+      if (data.count === 0) {
+        area.innerHTML = `<div class="alert alert-error">Nessuna azienda trovata per "${input}"</div>`;
+      } else if (data.count === 1) {
+        // Unico risultato → carica scheda direttamente
+        loadSheet(data.results[0].slug);
+      } else {
+        // Più risultati → mostra lista per selezionare
+        area.innerHTML = '';
+        lookDiv.style.display = 'block';
+        lookDiv.innerHTML = `
+          <div style="font-size:.88rem;color:#6B7280;margin-bottom:.5rem">${data.count} aziende trovate — clicca per aprire la scheda:</div>
+          ${data.results.map(r => `
+            <div onclick="loadSheet('${r.slug}')" style="padding:.5rem .75rem;border-radius:6px;cursor:pointer;
+                 border:1px solid #E5E7EB;margin-bottom:.35rem;display:flex;justify-content:space-between;align-items:center;
+                 background:#fff" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='#fff'">
+              <span style="font-weight:600">${r.ragione_sociale}</span>
+              <span style="font-size:.82rem;color:#6B7280">${r.provincia || ''} ${r.regione || ''}</span>
+            </div>`).join('')}`;
+      }
+    } catch(e) {
+      area.innerHTML = `<div class="alert alert-error">Errore: ${e.message}</div>`;
+    }
   }
 }
 
