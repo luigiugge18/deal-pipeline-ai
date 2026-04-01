@@ -34,9 +34,9 @@ CSV_URL   = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=cs
 # ── Multi-sheet config ────────────────────────────────────────────────────────
 # Ogni sheet ha: name (chiave usata come source_sheet), sheet_id, gid (None = primo foglio)
 SHEETS: list[dict] = [
-    {"name": "spurghi",        "sheet_id": "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48", "gid": "1243837551"},
-    {"name": "campagna",       "sheet_id": "1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU", "gid": None},
-    {"name": "r&d-ingegneria", "sheet_id": None, "gid": None},    # ← inserire sheet_id quando disponibile
+    {"name": "spurghi",           "sheet_id": "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48", "gid": "1243837551"},
+    {"name": "campagna",          "sheet_id": "1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU", "gid": "0"},
+    {"name": "koinos-ingegneria", "sheet_id": "1v9WjjhgzVEUOpu_ldr-lT7BqcB196pjBc2RJMxL8ytg", "gid": "1970091735"},
 ]
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
