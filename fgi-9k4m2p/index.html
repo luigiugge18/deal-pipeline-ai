@@ -323,7 +323,8 @@ const API = (location.hostname === 'localhost' || location.hostname === '127.0.0
 // ─────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────
-const fmtEur = v => v == null ? 'N/D' : v >= 1e6 ? `€${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `€${(v/1e3).toFixed(0)}K` : `€${v}`;
+const fmtEur    = v => v == null ? 'N/D' : v >= 1e6 ? `€${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `€${(v/1e3).toFixed(0)}K` : `€${v}`;
+const fmtEurK   = v => v == null ? '—'   : `${Math.round(v/1e3).toLocaleString('it-IT')}`;
 
 // Display name — hide if esclusiva
 function displayName(c) {
@@ -526,8 +527,8 @@ function renderSheet(c) {
     const cols = [0,1,2].filter(i => yearLabel(c,i));
     if (!cols.length) return '';
     const hdrs = cols.map(i => `<th style="text-align:right;padding:.4rem .75rem;font-weight:600;color:#374151">${yearLabel(c,i)}</th>`).join('');
-    const rowRicavi  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEur(c[`ricavi_${i}`])}</td>`).join('');
-    const rowEbitda  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEur(c[`ebitda_${i}`])}</td>`).join('');
+    const rowRicavi  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEurK(c[`ricavi_${i}`])}</td>`).join('');
+    const rowEbitda  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEurK(c[`ebitda_${i}`])}</td>`).join('');
     const rowMargin  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : '—'}</td>`).join('');
     return `
     <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1rem">
@@ -612,7 +613,7 @@ function renderSheet(c) {
 
       <div id="tab-financials" class="tab-pane active">
         ${(c.altro && c.altro.descrizione_web) ? `
-        <div style="background:#F0FDF4;border-left:3px solid #22C55E;padding:.75rem 1rem;border-radius:0 6px 6px 0;margin-bottom:1rem;font-size:.9rem;color:#166534;line-height:1.55">
+        <div style="background:#F8F9FA;border-left:3px solid #D1D5DB;padding:.75rem 1rem;border-radius:0 6px 6px 0;margin-bottom:1rem;font-size:.9rem;color:#374151;line-height:1.55">
           ${c.altro.descrizione_web}
         </div>` : ''}
         ${finTableHtml}
