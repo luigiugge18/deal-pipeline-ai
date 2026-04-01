@@ -464,6 +464,35 @@ def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_u
     return records
 
 
+# Priorità source_sheet: koinos-ingegneria > campagna > spurghi
+_SOURCE_PRIORITY = {"koinos-ingegneria": 3, "campagna": 2, "spurghi": 1}
+
+def _merge_altro(existing: dict | None, new: dict | None) -> dict:
+    """Merge JSONB `altro` preservando le chiavi esistenti non presenti nel nuovo import.
+
+    Regole:
+    - Chiavi esistenti NON presenti nel nuovo → preserve (es. descrizione_web, chiavi scraping)
+    - Chiavi nuove → aggiornano l'esistente
+    - source_sheet → vince il foglio con priorità più alta (koinos > campagna > spurghi)
+    """
+    base = dict(existing or {})
+    upd  = dict(new or {})
+
+    # Merge: il nuovo aggiorna il base, ma le chiavi "protette" del base sopravvivono
+    PROTECTED = {"descrizione_web"}  # chiavi che NON vanno mai sovrascritte dall'import
+    merged = {**base, **{k: v for k, v in upd.items() if k not in PROTECTED}}
+
+    # source_sheet: vince la priorità più alta
+    old_src = base.get("source_sheet", "spurghi")
+    new_src = upd.get("source_sheet", "spurghi")
+    if _SOURCE_PRIORITY.get(old_src, 0) >= _SOURCE_PRIORITY.get(new_src, 0):
+        merged["source_sheet"] = old_src
+    else:
+        merged["source_sheet"] = new_src
+
+    return merged
+
+
 def _run_import(records: list[dict]) -> tuple[int, int]:
     """Esegue upsert + embedding su una lista di record. Restituisce (inserted, errors)."""
     total    = len(records)
@@ -494,19 +523,23 @@ def _run_import(records: list[dict]) -> tuple[int, int]:
             try:
                 piva = rec.get("partita_iva")
                 if piva:
-                    existing = supabase.table("companies").select("id").eq("partita_iva", piva).execute()
+                    existing = supabase.table("companies").select("id, altro").eq("partita_iva", piva).execute()
                     if existing.data:
                         # Solo i campi non-None, per non sovrascrivere dati finanziari
                         # già presenti con null (es. campagna non ha ricavi/EBITDA)
                         rec_update = {k: v for k, v in rec.items() if v is not None}
+                        # Merge altro: preserva chiavi esistenti (es. descrizione_web)
+                        # e aggiorna con i nuovi valori dello sheet corrente
+                        rec_update["altro"] = _merge_altro(existing.data[0].get("altro"), rec.get("altro"))
                         supabase.table("companies").update(rec_update).eq("partita_iva", piva).execute()
                     else:
                         supabase.table("companies").insert(rec).execute()
                 else:
-                    existing = supabase.table("companies").select("id").ilike(
+                    existing = supabase.table("companies").select("id, altro").ilike(
                         "ragione_sociale", rec["ragione_sociale"]).execute()
                     if existing.data:
                         rec_update = {k: v for k, v in rec.items() if k != "slug"}
+                        rec_update["altro"] = _merge_altro(existing.data[0].get("altro"), rec.get("altro"))
                         supabase.table("companies").update(rec_update).eq(
                             "id", existing.data[0]["id"]).execute()
                     else:
