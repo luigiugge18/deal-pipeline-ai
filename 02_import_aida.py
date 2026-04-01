@@ -31,6 +31,15 @@ SHEET_ID  = "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48"
 GID       = "1243837551"
 CSV_URL   = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
+# ── Multi-sheet config ────────────────────────────────────────────────────────
+# Ogni sheet ha: name (chiave usata come source_sheet), sheet_id, gid (None = primo foglio)
+SHEETS: list[dict] = [
+    {"name": "aida",           "sheet_id": "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48", "gid": "1243837551"},
+    {"name": "campagna",       "sheet_id": "1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU", "gid": None},
+    {"name": "spurghi",        "sheet_id": None, "gid": None},    # ← inserire sheet_id
+    {"name": "r&d-ingegneria", "sheet_id": None, "gid": None},    # ← inserire sheet_id
+]
+
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 OPENAI_KEY   = os.environ["OPENAI_API_KEY"]
@@ -253,14 +262,15 @@ def _assign_financial_slots(fin_years: dict[int, int], row: list[str],
 
 
 # ── CSV Parsing ───────────────────────────────────────────────────────────────
-def fetch_csv(local_file: str | None = None) -> list[dict]:
+def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_url: str | None = None) -> list[dict]:
     if local_file:
-        log.info(f"Leggendo CSV da file locale: {local_file}")
+        log.info(f"Leggendo CSV da file locale: {local_file} (source_sheet={source_sheet})")
         with open(local_file, "r", encoding="utf-8") as f:
             content = f.read()
     else:
-        log.info("Scaricando CSV da Google Sheets…")
-        resp = requests.get(CSV_URL, timeout=60)
+        url = sheet_url or CSV_URL
+        log.info(f"Scaricando CSV da Google Sheets… (source_sheet={source_sheet})")
+        resp = requests.get(url, timeout=60)
         resp.raise_for_status()
         content = resp.text
 
@@ -354,6 +364,8 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
         for col_idx, col_name in unmatched_cols.items():
             if col_idx < len(row) and row[col_idx].strip():
                 altro[col_name] = row[col_idx].strip()
+        # Salva la source sheet per il frontend
+        altro['source_sheet'] = source_sheet
 
         # Fallback: se "Interesse a vendere" è finito in altro per problemi di parsing,
         # lo cattura comunque per impostare is_interessante correttamente
@@ -418,11 +430,8 @@ def fetch_csv(local_file: str | None = None) -> list[dict]:
     return records
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-def main():
-    import sys
-    local_file = sys.argv[1] if len(sys.argv) > 1 else None
-    records = fetch_csv(local_file)
+def _run_import(records: list[dict]) -> tuple[int, int]:
+    """Esegue upsert + embedding su una lista di record. Restituisce (inserted, errors)."""
     total    = len(records)
     inserted = 0
     errors   = 0
@@ -431,7 +440,6 @@ def main():
         batch = records[start : start + BATCH_SIZE]
         texts = [build_embedding_text(r) for r in batch]
 
-        # Genera embeddings
         try:
             embeddings = get_embeddings(texts)
         except Exception as e:
@@ -458,11 +466,9 @@ def main():
                     else:
                         supabase.table("companies").insert(rec).execute()
                 else:
-                    # Fallback: cerca per ragione_sociale (case-insensitive)
                     existing = supabase.table("companies").select("id").ilike(
                         "ragione_sociale", rec["ragione_sociale"]).execute()
                     if existing.data:
-                        # Aggiorna senza toccare lo slug (per evitare conflitti unique)
                         rec_update = {k: v for k, v in rec.items() if k != "slug"}
                         supabase.table("companies").update(rec_update).eq(
                             "id", existing.data[0]["id"]).execute()
@@ -474,10 +480,38 @@ def main():
                 errors += 1
         inserted += batch_ok
         log.info(f"  ✓ {inserted}/{total} inseriti")
-
         time.sleep(EMBED_DELAY_S)
 
-    log.info(f"\n=== COMPLETATO: {inserted} inseriti, {errors} errori ===")
+    return inserted, errors
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+def main():
+    import sys
+    local_file = sys.argv[1] if len(sys.argv) > 1 else None
+
+    if local_file:
+        # Singolo file locale: usa source_sheet dal nome del file (o "aida" di default)
+        fname = os.path.basename(local_file).lower().replace(".csv", "")
+        source = next((s["name"] for s in SHEETS if s["name"] in fname), "aida")
+        records = fetch_csv(local_file, source_sheet=source)
+        inserted, errors = _run_import(records)
+        log.info(f"\n=== {source.upper()} COMPLETATO: {inserted} inseriti, {errors} errori ===")
+    else:
+        # Scarica tutti i sheet configurati con URL
+        total_ins = 0; total_err = 0
+        for sh in SHEETS:
+            if not sh["sheet_id"]:
+                log.info(f"Sheet '{sh['name']}' non configurato (sheet_id mancante) — saltato")
+                continue
+            gid_param = f"&gid={sh['gid']}" if sh["gid"] else ""
+            url = f"https://docs.google.com/spreadsheets/d/{sh['sheet_id']}/export?format=csv{gid_param}"
+            log.info(f"\n{'='*60}\nImport: {sh['name'].upper()}\n{'='*60}")
+            records = fetch_csv(source_sheet=sh["name"], sheet_url=url)
+            ins, err = _run_import(records)
+            total_ins += ins; total_err += err
+            log.info(f"  → {sh['name']}: {ins} inseriti, {err} errori")
+        log.info(f"\n=== TOTALE: {total_ins} inseriti, {total_err} errori ===")
 
 if __name__ == "__main__":
     main()

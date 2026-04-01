@@ -339,21 +339,40 @@ function yearLabel(c, slot) {
   return c[`anno_${slot}`] ? String(c[`anno_${slot}`]) : '';
 }
 
-// Google Sheet link — detects AIDA vs campagna by altro keys
+// Google Sheet source registry — aggiornare con i link reali
+const SHEET_REGISTRY = {
+  // 'nome_chiave': { label: 'Label visibile', url: 'https://...', gid: null }
+  'aida':           { label: 'AIDA',        url: 'https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit', gid: '1243837551' },
+  'campagna':       { label: 'Campagna',    url: 'https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit', gid: null },
+  'spurghi':        { label: 'Spurghi',     url: null, gid: null },   // ← inserire URL
+  'r&d-ingegneria': { label: 'R&D Ing.',    url: null, gid: null },   // ← inserire URL
+};
+
 function sheetLink(c) {
   if (c.sheet_row == null) return '';
   const altro = c.altro || {};
-  const isCampagna = !!(altro['Business'] || altro['Tier'] || altro['Interesse a vendere'] || altro['Hotel stelle']);
-  let url;
-  if (isCampagna) {
-    // Campagna sheet — link to specific row
-    url = `https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit#gid=0&range=A${c.sheet_row}`;
-  } else {
-    // AIDA sheet — link to specific row
-    url = `https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551#gid=1243837551&range=A${c.sheet_row}`;
+
+  // 1. Usa source_sheet salvato in altro (dall'import) o fallback detection
+  const src = (c.source_sheet || altro['source_sheet'] || '').toLowerCase().replace(/\s+/g, '-');
+
+  // 2. Fallback: detect da chiavi in altro (per record vecchi senza source_sheet)
+  let key = src || (
+    (altro['Business'] || altro['Tier'] || altro['Interesse a vendere'] || altro['Hotel stelle'])
+      ? 'campagna'
+      : 'aida'
+  );
+
+  const sheet = SHEET_REGISTRY[key];
+  if (!sheet || !sheet.url) {
+    // URL non ancora configurato — mostra solo riga e nome
+    return `&nbsp;<span style="font-size:.82rem;color:#9CA3AF" title="Sheet: ${key}">📊 Riga ${c.sheet_row} · ${sheet ? sheet.label : key}</span>`;
   }
-  const label = isCampagna ? 'Campagna' : 'AIDA';
-  return `&nbsp;<a href="${url}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none" title="Apri riga ${c.sheet_row} nel Google Sheet (${label})">📊 Riga ${c.sheet_row} · ${label}</a>`;
+
+  const urlWithRow = sheet.gid
+    ? `${sheet.url}?gid=${sheet.gid}#gid=${sheet.gid}&range=A${c.sheet_row}`
+    : `${sheet.url}#gid=0&range=A${c.sheet_row}`;
+
+  return `&nbsp;<a href="${urlWithRow}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none" title="Apri riga ${c.sheet_row} nel Google Sheet (${sheet.label})">📊 Riga ${c.sheet_row} · ${sheet.label}</a>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -494,6 +513,7 @@ function buildResultCard(c, rank) {
           ${interestBadge}
           ${esclusivaBadge}
         </div>
+        ${c.website && !isEsclusiva ? `<div style="font-size:.82rem;margin:.3rem 0 .1rem;color:#4B5563">🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a></div>` : ''}
         ${finHtml}
         ${scoreHtml}${expl}
         ${scheda}
@@ -633,21 +653,26 @@ function renderSheet(c) {
     ? `<span class="badge badge-esclusiva" style="margin-left:.4rem">🔒 In esclusiva</span>`
     : '';
 
-  // Notes tab: hide sensitive info if esclusiva
+  // Notes tab — mostra tutti i campi strutturati + tutto il contenuto di altro
+  const ALTRO_SKIP = new Set(['descrizione_web', 'source_sheet']); // descrizione_web è nel tab Financials; source_sheet è tecnico
+  const altroRows = Object.entries(c.altro || {})
+    .filter(([k, v]) => !ALTRO_SKIP.has(k) && v != null && String(v).trim() !== '')
+    .map(([k, v]) => `
+      <div style="display:flex;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #F3F4F6;font-size:.88rem">
+        <span style="min-width:180px;color:#6B7280;font-weight:600;flex-shrink:0">${k}</span>
+        <span style="color:#1F2937">${v}</span>
+      </div>`).join('');
+
   const notesContent = isEsclusiva
     ? `<div class="alert alert-info">Questa azienda è in esclusiva. I dettagli di contatto sono riservati.</div>`
     : `
-      <div style="color:var(--gray);font-size:.9rem;margin-top:.5rem">
-        ${c.partita_iva ? `<strong>P.IVA:</strong> ${c.partita_iva} &nbsp;` : ''}
-        ${c.website ? `<strong>Web:</strong> <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank">${c.website}</a> &nbsp;` : ''}
-        ${c.telefono ? `<strong>Tel:</strong> ${c.telefono}` : ''}
-        ${sheetLink(c)}
-      </div>
-      ${c.dm_nome ? `<div class="alert alert-info" style="margin-top:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
-      ${c.azionisti ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
-      ${c.contatti ? `<div style="margin-top:.75rem;font-size:.85rem"><strong>Contatti:</strong> ${c.contatti}</div>` : ''}
-      ${c.note ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
-      ${c.next_steps ? `<div style="margin-top:.75rem"><strong style="font-size:.85rem">Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
+      ${c.dm_nome ? `<div class="alert alert-info" style="margin-bottom:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
+      ${c.azionisti ? `<div style="margin-bottom:.5rem;font-size:.88rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
+      ${c.contatti ? `<div style="margin-bottom:.75rem;font-size:.88rem"><strong>Contatti:</strong> ${c.contatti}</div>` : ''}
+      ${c.note ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">📝 Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
+      ${c.next_steps ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">➡️ Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
+      ${altroRows ? `<div style="margin-top:.5rem"><strong style="font-size:.85rem;color:#374151;display:block;margin-bottom:.4rem">📋 Dati aggiuntivi</strong>${altroRows}</div>` : ''}
+      ${!altroRows && !c.note && !c.next_steps && !c.azionisti && !c.contatti && !c.dm_nome ? '<div style="color:var(--gray);font-size:.9rem">Nessuna nota disponibile.</div>' : ''}
     `;
 
   document.getElementById('sheet-content').innerHTML = `
@@ -659,11 +684,17 @@ function renderSheet(c) {
             ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
             ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
-            ${sheetLink(c)}
           </div>
           <div style="margin-top:.4rem">${interestBadge}${esclusivaBadge}</div>
         </div>
       </div>
+
+      ${!isEsclusiva ? `<div style="display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;font-size:.85rem;color:#4B5563;padding:.6rem 0;border-bottom:1px solid var(--blue-light);margin-bottom:.75rem">
+        ${c.partita_iva ? `<span><strong style="color:#374151">P.IVA:</strong> ${c.partita_iva}</span>` : ''}
+        ${c.website ? `<span>🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a></span>` : ''}
+        ${c.telefono ? `<span>📞 ${c.telefono}</span>` : ''}
+        ${sheetLink(c)}
+      </div>` : ''}
 
       <div class="tabs-bar">
         <button class="tab-btn active" onclick="switchTab('financials',this)">📊 Financials</button>
