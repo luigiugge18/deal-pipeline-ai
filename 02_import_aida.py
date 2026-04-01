@@ -83,20 +83,31 @@ def to_date(val: str) -> str | None:
     return None
 
 def build_embedding_text(row: dict) -> str:
-    parts = [
-        row.get("ragione_sociale", ""),
-        f"ATECO {row.get('ateco_codice', '')}",
-        f"Regione: {row.get('regione', '')}",
-        f"Provincia: {row.get('provincia', '')}",
-        f"Comune: {row.get('comune', '')}",
-    ]
+    """Costruisce il testo per l'embedding includendo tutti i campi utili."""
+    parts = []
+
+    # Anagrafica
+    for field in ("ragione_sociale", "ateco_codice", "regione", "provincia", "comune", "website",
+                  "telefono", "azionisti", "csh_nome", "dm_nome", "note", "next_steps", "contatti"):
+        val = row.get(field)
+        if val and str(val).strip():
+            parts.append(str(val).strip())
+
+    # Financials (come contesto descrittivo)
     if row.get("ricavi_0"):
-        parts.append(f"Ricavi: {row['ricavi_0']:,} EUR")
+        parts.append(f"Ricavi {row.get('anno_0', '')}: {row['ricavi_0']:,} EUR")
     if row.get("ebitda_0"):
-        parts.append(f"EBITDA: {row['ebitda_0']:,} EUR")
+        parts.append(f"EBITDA {row.get('anno_0', '')}: {row['ebitda_0']:,} EUR")
     if row.get("ebitda_margin_0"):
         parts.append(f"EBITDA margin: {row['ebitda_margin_0']}%")
-    return " | ".join(p for p in parts if p.strip() and p.strip() not in ["ATECO ", "Regione: ", "Provincia: ", "Comune: "])
+
+    # Tutto il contenuto di 'altro' (descrizioni, business, tier, ecc.)
+    altro = row.get("altro") or {}
+    for key, val in altro.items():
+        if val and str(val).strip() and key.lower() not in ("tier",):
+            parts.append(f"{key}: {str(val).strip()}")
+
+    return " | ".join(p for p in parts if p and p.strip())
 
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     resp = openai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
