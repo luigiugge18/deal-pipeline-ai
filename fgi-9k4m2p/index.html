@@ -520,21 +520,40 @@ function renderSheet(c) {
   const isEsclusiva = !!c.esclusiva;
   const name        = displayName(c);
 
-  // Build KPI rows using real years
-  const kpis = [];
-  for (let i = 0; i < 3; i++) {
-    const yr = yearLabel(c, i);
-    const yrSuffix = yr ? ' ' + yr : '';
-    kpis.push(
-      { label: `Ricavi${yrSuffix}`,  value: fmtEur(c[`ricavi_${i}`]) },
-      { label: `EBITDA${yrSuffix}`,  value: fmtEur(c[`ebitda_${i}`]) },
-      { label: `EBITDA%${yrSuffix}`, value: c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : 'N/D' },
-    );
-  }
-  kpis.push(
-    { label: 'Provincia', value: c.provincia ?? 'N/D' },
-    { label: 'Comune',    value: c.comune    ?? 'N/D' },
-  );
+  // Build financial table: rows = Revenue/EBITDA/Margin, cols = years
+  const finYears = [0,1,2].map(i => yearLabel(c, i)).filter(y => y);
+  const finTableHtml = (() => {
+    const cols = [0,1,2].filter(i => yearLabel(c,i));
+    if (!cols.length) return '';
+    const hdrs = cols.map(i => `<th style="text-align:right;padding:.4rem .75rem;font-weight:600;color:#374151">${yearLabel(c,i)}</th>`).join('');
+    const rowRicavi  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEur(c[`ricavi_${i}`])}</td>`).join('');
+    const rowEbitda  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEur(c[`ebitda_${i}`])}</td>`).join('');
+    const rowMargin  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : '—'}</td>`).join('');
+    return `
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1rem">
+      <thead>
+        <tr style="border-bottom:2px solid #E5E7EB">
+          <th style="text-align:left;padding:.4rem .75rem;font-weight:600;color:#374151">€ 000</th>
+          ${hdrs}
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #F3F4F6">
+          <td style="padding:.4rem .75rem;color:#6B7280;font-size:.85rem">Revenue</td>${rowRicavi}
+        </tr>
+        <tr style="border-bottom:1px solid #F3F4F6">
+          <td style="padding:.4rem .75rem;color:#6B7280;font-size:.85rem">EBITDA</td>${rowEbitda}
+        </tr>
+        <tr>
+          <td style="padding:.4rem .75rem;color:#6B7280;font-size:.85rem">Margine %</td>${rowMargin}
+        </tr>
+      </tbody>
+    </table>`;
+  })();
+  // Location pills (kept below table)
+  const locHtml = `<div style="font-size:.85rem;color:#6B7280;margin-top:.25rem">
+    ${c.comune ? `<span style="margin-right:.75rem">📍 ${c.comune}${c.provincia ? ' (' + c.provincia + ')' : ''}</span>` : ''}
+  </div>`;
 
   const callsHtml = (c.call_notes || []).length
     ? (c.call_notes || []).map(n => `
@@ -596,12 +615,8 @@ function renderSheet(c) {
         <div style="background:#F0FDF4;border-left:3px solid #22C55E;padding:.75rem 1rem;border-radius:0 6px 6px 0;margin-bottom:1rem;font-size:.9rem;color:#166534;line-height:1.55">
           ${c.altro.descrizione_web}
         </div>` : ''}
-        <div class="kpi-grid">${kpis.map(k=>`
-          <div class="kpi-card">
-            <div class="kpi-label">${k.label}</div>
-            <div class="kpi-value">${k.value}</div>
-          </div>`).join('')}
-        </div>
+        ${finTableHtml}
+        ${locHtml}
       </div>
 
       <div id="tab-notes" class="tab-pane">${notesContent}</div>
