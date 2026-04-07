@@ -72,6 +72,8 @@ def search_structured(
     max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
     max_ebitda_pct: float | None = None,
+    min_ebitda: int | None = None,
+    max_ebitda: int | None = None,
     solo_interessanti: bool = True,
     limit: int = 20,
 ) -> list[dict]:
@@ -94,6 +96,10 @@ def search_structured(
         q = q.gte('ebitda_margin_0', min_ebitda_pct)
     if max_ebitda_pct is not None:
         q = q.lte('ebitda_margin_0', max_ebitda_pct)
+    if min_ebitda is not None:
+        q = q.gte('ebitda_0', min_ebitda)
+    if max_ebitda is not None:
+        q = q.lte('ebitda_0', max_ebitda)
     if solo_interessanti:
         q = q.eq('is_interessante', True)
 
@@ -132,6 +138,8 @@ def search(
     max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
     max_ebitda_pct: float | None = None,
+    min_ebitda: int | None = None,
+    max_ebitda: int | None = None,
     solo_interessanti: bool = True,
     limit: int = 50,
     explain: bool = False,
@@ -153,6 +161,8 @@ def search(
             'max_ricavi': max_ricavi,
             'min_ebitda_pct': min_ebitda_pct,
             'max_ebitda_pct': max_ebitda_pct,
+            'min_ebitda': min_ebitda,
+            'max_ebitda': max_ebitda,
             'filter_ateco': ateco_codici,
             'filter_regione': regione,
             'match_count': limit,
@@ -168,6 +178,8 @@ def search(
             max_ricavi=max_ricavi,
             min_ebitda_pct=min_ebitda_pct,
             max_ebitda_pct=max_ebitda_pct,
+            min_ebitda=min_ebitda,
+            max_ebitda=max_ebitda,
             solo_interessanti=solo_interessanti,
             limit=limit,
         )
