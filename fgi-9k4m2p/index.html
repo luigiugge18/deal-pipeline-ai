@@ -7,7 +7,7 @@
   <!-- SheetJS per export Excel client-side -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
-    /* ââ Reset & base ââ */
+    /* ── Reset & base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --blue:       #1A3557;
@@ -26,7 +26,7 @@
     }
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #F0F4F9; color: #222; min-height: 100vh; }
 
-    /* ââ Nav ââ */
+    /* ── Nav ── */
     nav {
       background: var(--blue);
       padding: 0 2rem;
@@ -52,11 +52,11 @@
     .nav-tab:hover  { background: rgba(255,255,255,.1); color: #fff; }
     .nav-tab.active { background: var(--blue2); color: #fff; }
 
-    /* ââ Layout ââ */
+    /* ── Layout ── */
     .page { display: none; padding: 2rem; max-width: 1200px; margin: 0 auto; }
     .page.active { display: block; }
 
-    /* ââ Cards ââ */
+    /* ── Cards ── */
     .card {
       background: var(--white);
       border-radius: var(--radius);
@@ -71,7 +71,7 @@
       border-bottom: 2px solid var(--blue-light);
     }
 
-    /* ââ Form ââ */
+    /* ── Form ── */
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
     @media(max-width:700px){ .form-grid, .form-grid.cols3 { grid-template-columns: 1fr; } }
@@ -94,7 +94,7 @@
     .span2 { grid-column: span 2; }
     .span3 { grid-column: span 3; }
 
-    /* ââ Buttons ââ */
+    /* ── Buttons ── */
     .btn {
       display: inline-flex; align-items: center; gap: .4rem;
       border: none; border-radius: 6px; padding: .6rem 1.4rem;
@@ -109,7 +109,7 @@
     .btn-sm       { padding: .35rem .9rem; font-size: .82rem; }
     .btn-group    { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
 
-    /* ââ Results ââ */
+    /* ── Results ── */
     #results-area { margin-top: 1.5rem; }
     .results-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -120,7 +120,7 @@
     }
     .results-count strong { color: var(--blue); }
 
-    /* ââ Result Card ââ */
+    /* ── Result Card ── */
     .result-card {
       background: var(--white);
       border-radius: var(--radius);
@@ -177,7 +177,7 @@
     .score-fill  { height: 100%; background: var(--blue2); border-radius: 3px; transition: width .4s; }
 
 
-    /* ââ Company Sheet ââ */
+    /* ── Company Sheet ── */
     #sheet-content { display: none; }
     .sheet-header {
       display: flex; align-items: flex-start; justify-content: space-between;
@@ -208,7 +208,7 @@
     .call-meta  { font-size: .78rem; color: var(--gray); margin-bottom: .3rem; }
     .call-summary { font-size: .88rem; font-style: italic; color: #444; }
 
-    /* ââ Loading ââ */
+    /* ── Loading ── */
     .spinner {
       display: inline-block; width: 20px; height: 20px;
       border: 3px solid var(--blue-light);
@@ -218,7 +218,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-row { display: flex; align-items: center; gap: .7rem; color: var(--gray); padding: 1rem 0; }
 
-    /* ââ Export button ââ */
+    /* ── Export button ── */
     .btn-export {
       background: var(--green); color: #fff;
       display: inline-flex; align-items: center; gap: .4rem;
@@ -229,7 +229,7 @@
     .btn-export:hover  { filter: brightness(1.1); }
     .btn-export:disabled { opacity: .55; cursor: not-allowed; }
 
-    /* ââ Empty / Error ââ */
+    /* ── Empty / Error ── */
     .empty-state { text-align: center; padding: 3rem 1rem; color: var(--gray); }
     .empty-icon  { font-size: 2.5rem; margin-bottom: .5rem; }
     .alert { border-radius: 6px; padding: .7rem 1rem; font-size: .9rem; margin-bottom: 1rem; }
@@ -240,34 +240,34 @@
 </head>
 <body>
 
-<!-- ââ NAVBAR ââ -->
+<!-- ── NAVBAR ── -->
 <nav>
   <div class="nav-brand">Deal Pipeline <span>AI</span></div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showPage('search')">ð Ricerca Buyer</button>
-    <button class="nav-tab"        onclick="showPage('sheet')">ð Scheda Azienda</button>
+    <button class="nav-tab active" onclick="showPage('search')">🔍 Ricerca Buyer</button>
+    <button class="nav-tab"        onclick="showPage('sheet')">📋 Scheda Azienda</button>
   </div>
 </nav>
 
-<!-- âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+<!-- ═══════════════════════════════════════════════════════════════
      PAGE 1: RICERCA BUYER
-âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+═══════════════════════════════════════════════════════════════ -->
 <div id="page-search" class="page active">
 
   <!-- Criteri Buyer -->
   <div class="card">
-    <div class="card-title">ð¯ Criteri del Buyer</div>
+    <div class="card-title">🎯 Criteri del Buyer</div>
     <div class="form-grid">
       <div class="form-group span2">
         <label>Descrizione libera</label>
-        <textarea id="q-text" placeholder="es. azienda manifatturiera nel Nord Italia con forte export, EBITDA > 10%â¦"></textarea>
+        <textarea id="q-text" placeholder="es. azienda manifatturiera nel Nord Italia con forte export, EBITDA > 10%…"></textarea>
       </div>
       <div class="form-group">
-        <label>Fatturato minimo (â¬)</label>
+        <label>Fatturato minimo (€)</label>
         <input type="number" id="q-rev-min" placeholder="es. 1000000" step="100000" />
       </div>
       <div class="form-group">
-        <label>Fatturato massimo (â¬)</label>
+        <label>Fatturato massimo (€)</label>
         <input type="number" id="q-rev-max" placeholder="es. 10000000" step="100000" />
       </div>
     </div>
@@ -288,8 +288,8 @@
       </div>
     </div>
     <div class="btn-group">
-      <button class="btn btn-primary" onclick="doSearch()">ð Cerca</button>
-      <button class="btn btn-outline" onclick="clearSearch()">â Cancella</button>
+      <button class="btn btn-primary" onclick="doSearch()">🔍 Cerca</button>
+      <button class="btn btn-outline" onclick="clearSearch()">✕ Cancella</button>
       <label style="display:flex;align-items:center;gap:.4rem;font-size:.87rem;cursor:pointer;margin-left:.5rem">
         <input type="checkbox" id="q-interessanti" checked /> Solo aziende interessate
       </label>
@@ -304,9 +304,9 @@
 </div>
 
 
-<!-- âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+<!-- ═══════════════════════════════════════════════════════════════
      PAGE 2: SCHEDA AZIENDA
-âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+═══════════════════════════════════════════════════════════════ -->
 <div id="page-sheet" class="page">
   <div class="card">
     <div style="display:flex;gap:.75rem;align-items:center;">
@@ -326,33 +326,33 @@
 
 
 <script>
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // CONFIG
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 const PROD_API  = 'https://web-production-129e3.up.railway.app';
 const LOCAL_API = 'http://localhost:8000';
 const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
   ? LOCAL_API
   : PROD_API;
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Helpers
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const fmtEur    = v => v == null ? 'N/D' : v >= 1e6 ? `â¬${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `â¬${(v/1e3).toFixed(0)}K` : `â¬${v}`;
-const fmtEurK   = v => v == null ? 'â'   : `${Math.round(v/1e3).toLocaleString('it-IT')}`;
+// ─────────────────────────────────────────────────────────────────
+const fmtEur    = v => v == null ? 'N/D' : v >= 1e6 ? `€${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `€${(v/1e3).toFixed(0)}K` : `€${v}`;
+const fmtEurK   = v => v == null ? '—'   : `${Math.round(v/1e3).toLocaleString('it-IT')}`;
 
-// Display name â hide if esclusiva
+// Display name — hide if esclusiva
 function displayName(c) {
-  if (c.esclusiva) return 'ð Azienda in esclusiva';
+  if (c.esclusiva) return '🔒 Azienda in esclusiva';
   return c.ragione_sociale;
 }
 
-// Year label for financial slot â always shows the actual year
+// Year label for financial slot — always shows the actual year
 function yearLabel(c, slot) {
   return c[`anno_${slot}`] ? String(c[`anno_${slot}`]) : '';
 }
 
-// Google Sheet source registry â aggiornare con i link reali
+// Google Sheet source registry — aggiornare con i link reali
 const SHEET_REGISTRY = {
   'spurghi':           { label: 'Spurghi',     url: 'https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit', gid: '1243837551' },
   'campagna':          { label: 'Campagna',    url: 'https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit', gid: '0' },
@@ -382,12 +382,12 @@ function sheetLink(c) {
       ? `${sheet.url}?gid=${sheet.gid}`
       : sheet.url;
 
-  return `<a href="${url}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none;white-space:nowrap" title="Apri in Google Sheet (${sheet.label})">ð ${sheet.label}</a>`;
+  return `<a href="${url}" target="_blank" style="font-size:.82rem;color:var(--blue2);text-decoration:none;white-space:nowrap" title="Apri in Google Sheet (${sheet.label})">📊 ${sheet.label}</a>`;
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Load ATECO options
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 async function loadSectors() {
   try {
     const resp = await fetch(`${API}/sectors`);
@@ -404,9 +404,9 @@ async function loadSectors() {
 }
 loadSectors();
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Navigazione
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -414,12 +414,12 @@ function showPage(id) {
   event.currentTarget.classList.add('active');
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Ricerca
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 async function doSearch() {
   const area = document.getElementById('results-area');
-  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Ricerca in corsoâ¦</div>`;
+  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Ricerca in corso…</div>`;
 
   const body = {
     query:             document.getElementById('q-text').value.trim() || null,
@@ -447,14 +447,14 @@ async function doSearch() {
   }
 }
 
-// Risultati correnti â aggiornati ad ogni ricerca
+// Risultati correnti — aggiornati ad ogni ricerca
 let _currentResults = [];
 let _currentQuery   = '';
 
 function renderResults(data, query) {
   const area = document.getElementById('results-area');
   if (!data.results?.length) {
-    area.innerHTML = `<div class="empty-state"><div class="empty-icon">ð</div><p>Nessun risultato trovato. Prova ad ampliare i criteri.</p></div>`;
+    area.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun risultato trovato. Prova ad ampliare i criteri.</p></div>`;
     _currentResults = [];
     return;
   }
@@ -470,7 +470,7 @@ function renderResults(data, query) {
         <span style="color:#aaa;margin-left:.5rem">(${data.query_time}s)</span>
       </div>
       <button class="btn-export" id="btn-export" onclick="exportResults()">
-        â¬ï¸ Export Excel
+        ⬇️ Export Excel
       </button>
     </div>`;
 
@@ -488,16 +488,16 @@ function buildResultCard(c, rank) {
       <div class="score-track"><div class="score-fill" style="width:${Math.round(c.score*100)}%"></div></div>
     </div>` : '';
 
-  const expl = c.match_explanation ? `<div class="result-explanation">ð¤ ${c.match_explanation}</div>` : '';
+  const expl = c.match_explanation ? `<div class="result-explanation">🤖 ${c.match_explanation}</div>` : '';
 
   const interestBadge = c.is_interessante
     ? (c.livello_interesse === 'potenziale'
-        ? `<span class="badge badge-potenziale">â¡ Potenzialmente interessato</span>`
-        : `<span class="badge badge-chiaro">â Interessato a vendere</span>`)
+        ? `<span class="badge badge-potenziale">⚡ Potenzialmente interessato</span>`
+        : `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`)
     : '';
 
   const esclusivaBadge = isEsclusiva
-    ? `<span class="badge badge-esclusiva">ð Esclusiva</span>`
+    ? `<span class="badge badge-esclusiva">🔒 Esclusiva</span>`
     : '';
 
   // Financial row with real years
@@ -520,8 +520,8 @@ function buildResultCard(c, rank) {
 
   // Only show "Scheda completa" button if not esclusiva
   const scheda = !isEsclusiva
-    ? `<div style="margin-top:.5rem"><button class="btn btn-outline btn-sm" onclick="openSheet('${c.slug}',event)">ð Scheda completa</button></div>`
-    : `<div style="margin-top:.5rem;font-size:.83rem;color:#7C3AED;">Il nome Ã¨ riservato â azienda in esclusiva con un buyer.</div>`;
+    ? `<div style="margin-top:.5rem"><button class="btn btn-outline btn-sm" onclick="openSheet('${c.slug}',event)">📋 Scheda completa</button></div>`
+    : `<div style="margin-top:.5rem;font-size:.83rem;color:#7C3AED;">Il nome è riservato — azienda in esclusiva con un buyer.</div>`;
 
   return `
     <div class="result-card${isEsclusiva ? ' esclusiva' : ''}" id="card-${c.slug}">
@@ -534,12 +534,12 @@ function buildResultCard(c, rank) {
         </div>
         <div class="result-meta">
           ${c.ateco_codice ? `<span class="badge badge-sector">ATECO ${c.ateco_codice}</span>` : ''}
-          ${c.regione ? `<span class="badge badge-geo">ð ${c.regione}${c.provincia ? ' Â· ' + c.provincia : ''}</span>` : ''}
+          ${c.regione ? `<span class="badge badge-geo">📍 ${c.regione}${c.provincia ? ' · ' + c.provincia : ''}</span>` : ''}
           ${interestBadge}
           ${esclusivaBadge}
         </div>
         ${!isEsclusiva ? `<div style="font-size:.82rem;margin:.3rem 0 .1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
-          ${c.website ? `ð <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a>` : ''}
+          ${c.website ? `🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a>` : ''}
           ${sheetLink(c)}
         </div>` : ''}
         ${finHtml}
@@ -555,9 +555,9 @@ function clearSearch() {
   document.getElementById('results-area').innerHTML = '';
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Scheda azienda
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 function openSheet(slug, evt) {
   if (evt) evt.stopPropagation();
   document.getElementById('slug-input').value = slug;
@@ -576,9 +576,9 @@ async function loadSheet(slugDirect) {
   area.style.display = 'block';
   lookDiv.style.display = 'none';
   lookDiv.innerHTML = '';
-  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Caricamento schedaâ¦</div>`;
+  area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Caricamento scheda…</div>`;
 
-  // Se Ã¨ uno slug (niente spazi, solo lettere/trattini) â carica diretto
+  // Se è uno slug (niente spazi, solo lettere/trattini) → carica diretto
   const isSlug = /^[a-z0-9-]+$/.test(input);
 
   if (isSlug) {
@@ -602,14 +602,14 @@ async function loadSheet(slugDirect) {
       if (data.count === 0) {
         area.innerHTML = `<div class="alert alert-error">Nessuna azienda trovata per "${input}"</div>`;
       } else if (data.count === 1) {
-        // Unico risultato â carica scheda direttamente
+        // Unico risultato → carica scheda direttamente
         loadSheet(data.results[0].slug);
       } else {
-        // PiÃ¹ risultati â mostra lista per selezionare
+        // Più risultati → mostra lista per selezionare
         area.innerHTML = '';
         lookDiv.style.display = 'block';
         lookDiv.innerHTML = `
-          <div style="font-size:.88rem;color:#6B7280;margin-bottom:.5rem">${data.count} aziende trovate â clicca per aprire la scheda:</div>
+          <div style="font-size:.88rem;color:#6B7280;margin-bottom:.5rem">${data.count} aziende trovate — clicca per aprire la scheda:</div>
           ${data.results.map(r => `
             <div onclick="loadSheet('${r.slug}')" style="padding:.5rem .75rem;border-radius:6px;cursor:pointer;
                  border:1px solid #E5E7EB;margin-bottom:.35rem;display:flex;justify-content:space-between;align-items:center;
@@ -636,12 +636,12 @@ function renderSheet(c) {
     const hdrs = cols.map(i => `<th style="text-align:right;padding:.4rem .75rem;font-weight:600;color:#374151">${yearLabel(c,i)}</th>`).join('');
     const rowRicavi  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEurK(c[`ricavi_${i}`])}</td>`).join('');
     const rowEbitda  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${fmtEurK(c[`ebitda_${i}`])}</td>`).join('');
-    const rowMargin  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : 'â'}</td>`).join('');
+    const rowMargin  = cols.map(i => `<td style="text-align:right;padding:.4rem .75rem">${c[`ebitda_margin_${i}`] != null ? c[`ebitda_margin_${i}`] + '%' : '—'}</td>`).join('');
     return `
     <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1rem">
       <thead>
         <tr style="border-bottom:2px solid #E5E7EB">
-          <th style="text-align:left;padding:.4rem .75rem;font-weight:600;color:#374151">â¬ 000</th>
+          <th style="text-align:left;padding:.4rem .75rem;font-weight:600;color:#374151">€ 000</th>
           ${hdrs}
         </tr>
       </thead>
@@ -660,29 +660,29 @@ function renderSheet(c) {
   })();
   // Location pills (kept below table)
   const locHtml = `<div style="font-size:.85rem;color:#6B7280;margin-top:.25rem">
-    ${c.comune ? `<span style="margin-right:.75rem">ð ${c.comune}${c.provincia ? ' (' + c.provincia + ')' : ''}</span>` : ''}
+    ${c.comune ? `<span style="margin-right:.75rem">📍 ${c.comune}${c.provincia ? ' (' + c.provincia + ')' : ''}</span>` : ''}
   </div>`;
 
   const callsHtml = (c.call_notes || []).length
     ? (c.call_notes || []).map(n => `
         <div class="call-item">
-          <div class="call-meta">ð ${n.call_date || 'Data N/D'} Â· Fonte: ${n.source || 'N/D'}</div>
+          <div class="call-meta">📅 ${n.call_date || 'Data N/D'} · Fonte: ${n.source || 'N/D'}</div>
           ${n.summary ? `<div class="call-summary">${n.summary}</div>` : ''}
         </div>`).join('')
     : '<div style="color:var(--gray);font-size:.9rem">Nessuna call registrata.</div>';
 
   const interestBadge = c.is_interessante
     ? (c.livello_interesse === 'potenziale'
-        ? `<span class="badge badge-potenziale">â¡ Potenzialmente interessato</span>`
-        : `<span class="badge badge-chiaro">â Interessato a vendere</span>`)
-    : `<span class="badge" style="background:#F3F4F6;color:#6B7280">â Non segnalato come interessato</span>`;
+        ? `<span class="badge badge-potenziale">⚡ Potenzialmente interessato</span>`
+        : `<span class="badge badge-chiaro">✅ Interessato a vendere</span>`)
+    : `<span class="badge" style="background:#F3F4F6;color:#6B7280">— Non segnalato come interessato</span>`;
 
   const esclusivaBadge = isEsclusiva
-    ? `<span class="badge badge-esclusiva" style="margin-left:.4rem">ð In esclusiva</span>`
+    ? `<span class="badge badge-esclusiva" style="margin-left:.4rem">🔒 In esclusiva</span>`
     : '';
 
-  // Notes tab â mostra tutti i campi strutturati + tutto il contenuto di altro
-  const ALTRO_SKIP = new Set(['descrizione_web', 'source_sheet']); // descrizione_web Ã¨ nel tab Financials; source_sheet Ã¨ tecnico
+  // Notes tab — mostra tutti i campi strutturati + tutto il contenuto di altro
+  const ALTRO_SKIP = new Set(['descrizione_web', 'source_sheet']); // descrizione_web è nel tab Financials; source_sheet è tecnico
   const altroRows = Object.entries(c.altro || {})
     .filter(([k, v]) => !ALTRO_SKIP.has(k) && v != null && String(v).trim() !== '')
     .map(([k, v]) => `
@@ -692,14 +692,14 @@ function renderSheet(c) {
       </div>`).join('');
 
   const notesContent = isEsclusiva
-    ? `<div class="alert alert-info">Questa azienda Ã¨ in esclusiva. I dettagli di contatto sono riservati.</div>`
+    ? `<div class="alert alert-info">Questa azienda è in esclusiva. I dettagli di contatto sono riservati.</div>`
     : `
       ${c.dm_nome ? `<div class="alert alert-info" style="margin-bottom:.8rem"><strong>DM:</strong> ${c.dm_nome}${c.dm_codice_fiscale ? ' &nbsp;|&nbsp; CF: ' + c.dm_codice_fiscale : ''}</div>` : ''}
       ${c.azionisti ? `<div style="margin-bottom:.5rem;font-size:.88rem"><strong>Azionisti:</strong> ${c.azionisti}</div>` : ''}
       ${c.contatti ? `<div style="margin-bottom:.75rem;font-size:.88rem"><strong>Contatti:</strong> ${c.contatti}</div>` : ''}
-      ${c.note ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">ð Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
-      ${c.next_steps ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">â¡ï¸ Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
-      ${altroRows ? `<div style="margin-top:.5rem"><strong style="font-size:.85rem;color:#374151;display:block;margin-bottom:.4rem">ð Dati aggiuntivi</strong>${altroRows}</div>` : ''}
+      ${c.note ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">📝 Note:</strong><div class="notes-text" style="margin-top:.3rem">${c.note}</div></div>` : ''}
+      ${c.next_steps ? `<div style="margin-bottom:.75rem"><strong style="font-size:.85rem;color:#374151">➡️ Next steps:</strong><div class="notes-text" style="margin-top:.3rem">${c.next_steps}</div></div>` : ''}
+      ${altroRows ? `<div style="margin-top:.5rem"><strong style="font-size:.85rem;color:#374151;display:block;margin-bottom:.4rem">📋 Dati aggiuntivi</strong>${altroRows}</div>` : ''}
       ${!altroRows && !c.note && !c.next_steps && !c.azionisti && !c.contatti && !c.dm_nome ? '<div style="color:var(--gray);font-size:.9rem">Nessuna nota disponibile.</div>' : ''}
     `;
 
@@ -709,8 +709,8 @@ function renderSheet(c) {
         <div>
           <div class="sheet-name${isEsclusiva ? ' esclusiva' : ''}">${name}</div>
           <div class="sheet-sub">
-            ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> Â· ` : ''}
-            ${c.regione || ''} ${c.provincia ? 'Â· ' + c.provincia : ''}
+            ${c.ateco_codice ? `<strong>ATECO ${c.ateco_codice}</strong> · ` : ''}
+            ${c.regione || ''} ${c.provincia ? '· ' + c.provincia : ''}
             <span style="margin-left:.5rem;font-size:.8rem;color:#aaa">Aggiornato: ${c.last_updated ? new Date(c.last_updated).toLocaleDateString('it-IT') : 'N/D'}</span>
           </div>
           <div style="margin-top:.4rem">${interestBadge}${esclusivaBadge}</div>
@@ -719,15 +719,15 @@ function renderSheet(c) {
 
       ${!isEsclusiva ? `<div style="display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;font-size:.85rem;color:#4B5563;padding:.6rem 0;border-bottom:1px solid var(--blue-light);margin-bottom:.75rem">
         ${c.partita_iva ? `<span><strong style="color:#374151">P.IVA:</strong> ${c.partita_iva}</span>` : ''}
-        ${c.website ? `<span>ð <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a></span>` : ''}
-        ${c.telefono ? `<span>ð ${c.telefono}</span>` : ''}
+        ${c.website ? `<span>🌐 <a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" style="color:var(--blue2)">${c.website}</a></span>` : ''}
+        ${c.telefono ? `<span>📞 ${c.telefono}</span>` : ''}
         ${sheetLink(c)}
       </div>` : ''}
 
       <div class="tabs-bar">
-        <button class="tab-btn active" onclick="switchTab('financials',this)">ð Financials</button>
-        <button class="tab-btn"        onclick="switchTab('notes',this)">ð Note</button>
-        <button class="tab-btn"        onclick="switchTab('calls',this)">ð Call History</button>
+        <button class="tab-btn active" onclick="switchTab('financials',this)">📊 Financials</button>
+        <button class="tab-btn"        onclick="switchTab('notes',this)">📝 Note</button>
+        <button class="tab-btn"        onclick="switchTab('calls',this)">📞 Call History</button>
       </div>
 
       <div id="tab-financials" class="tab-pane active">
@@ -745,14 +745,14 @@ function renderSheet(c) {
     </div>`;
 }
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 // Export Excel
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─────────────────────────────────────────────────────────────────
 async function exportResults() {
   if (!_currentResults.length) return;
 
   const btn = document.getElementById('btn-export');
-  if (btn) { btn.disabled = true; btn.textContent = 'â³ Generazioneâ¦'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generazione…'; }
 
   try {
     // Recupera dati completi per ogni azienda (serve per P.IVA e campi extra)
@@ -762,7 +762,7 @@ async function exportResults() {
       )
     );
 
-    // Arrotonda al 100k piÃ¹ vicino e mostra in migliaia (â¬ 000)
+    // Arrotonda al 100k più vicino e mostra in migliaia (€ 000)
     const round100k = v => v == null ? null : Math.round(v / 100000) * 100;
     const fmtPct    = v => v == null ? null : parseFloat(v.toFixed(1));
 
@@ -793,21 +793,21 @@ async function exportResults() {
       // Descrizione web (testo completo del sito)
       const dw = (c.altro || {}).descrizione_web;
       if (dw && dw.trim()) parts.push(dw.trim());
-      return parts.join(' ') || 'â';
+      return parts.join(' ') || '—';
     }
 
     const rows = fullData.map(c => ({
-      'Nome Azienda':    c.esclusiva ? 'ð Azienda in esclusiva' : (c.ragione_sociale || ''),
-      'P. IVA':          c.partita_iva || 'â',
-      'Sito Web':        c.website || 'â',
-      'Fonte':           { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' }[(c.altro || {}).source_sheet] || 'â',
-      'Regione':         c.regione || 'â',
-      [`Rev ${c.anno_0 || '\'24'} (â¬000)`]:    round100k(c.ricavi_0),
-      [`Rev ${c.anno_1 || '\'23'} (â¬000)`]:    round100k(c.ricavi_1),
-      [`Rev ${c.anno_2 || '\'22'} (â¬000)`]:    round100k(c.ricavi_2),
-      [`EBITDA ${c.anno_0 || '\'24'} (â¬000)`]: round100k(c.ebitda_0),
-      [`EBITDA ${c.anno_1 || '\'23'} (â¬000)`]: round100k(c.ebitda_1),
-      [`EBITDA ${c.anno_2 || '\'22'} (â¬000)`]: round100k(c.ebitda_2),
+      'Nome Azienda':    c.esclusiva ? '🔒 Azienda in esclusiva' : (c.ragione_sociale || ''),
+      'P. IVA':          c.partita_iva || '—',
+      'Sito Web':        c.website || '—',
+      'Fonte':           { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' }[(c.altro || {}).source_sheet] || '—',
+      'Regione':         c.regione || '—',
+      [`Rev ${c.anno_0 || '\'24'} (€000)`]:    round100k(c.ricavi_0),
+      [`Rev ${c.anno_1 || '\'23'} (€000)`]:    round100k(c.ricavi_1),
+      [`Rev ${c.anno_2 || '\'22'} (€000)`]:    round100k(c.ricavi_2),
+      [`EBITDA ${c.anno_0 || '\'24'} (€000)`]: round100k(c.ebitda_0),
+      [`EBITDA ${c.anno_1 || '\'23'} (€000)`]: round100k(c.ebitda_1),
+      [`EBITDA ${c.anno_2 || '\'22'} (€000)`]: round100k(c.ebitda_2),
       [`Marg% ${c.anno_0 || '\'24'}`]:          fmtPct(c.ebitda_margin_0),
       [`Marg% ${c.anno_1 || '\'23'}`]:          fmtPct(c.ebitda_margin_1),
       'Descrizione':     buildDesc(c),
@@ -819,7 +819,7 @@ async function exportResults() {
     const colWidths = [40, 16, 28, 18, 14, 14, 14, 14, 14, 14, 14, 10, 10, 80];
     ws['!cols'] = colWidths.map(w => ({ wch: w }));
 
-    // Stile header (riga 1) â sfondo blu, testo bianco
+    // Stile header (riga 1) — sfondo blu, testo bianco
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let C = range.s.c; C <= range.e.c; C++) {
       const addr = XLSX.utils.encode_cell({ r: 0, c: C });
@@ -850,7 +850,7 @@ async function exportResults() {
   } catch(e) {
     alert('Errore export: ' + e.message);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'â¬ï¸ Export Excel'; }
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Export Excel'; }
   }
 }
 
