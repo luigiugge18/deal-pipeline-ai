@@ -582,7 +582,7 @@ function openSheet(slug, evt) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-sheet').classList.add('active');
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', i===1));
-  loadSheet();
+  loadSheet(slug);  // passa lo slug direttamente → carica /company/{slug} senza passare per /lookup
 }
 
 async function loadSheet(slugDirect) {
