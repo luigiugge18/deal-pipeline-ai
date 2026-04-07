@@ -160,15 +160,22 @@ def search(
             'min_ricavi': min_ricavi,
             'max_ricavi': max_ricavi,
             'min_ebitda_pct': min_ebitda_pct,
-            'max_ebitda_pct': max_ebitda_pct,
-            'min_ebitda': min_ebitda,
-            'max_ebitda': max_ebitda,
+            # max_ebitda_pct / min_ebitda / max_ebitda non sono nella funzione Postgres
+            # → vengono applicati come post-filtri sotto
             'filter_ateco': ateco_codici,
             'filter_regione': regione,
             'match_count': limit,
             'filter_interessanti': solo_interessanti,
         }).execute()
         results = resp.data or []
+
+        # Post-filtri non supportati dalla RPC
+        if max_ebitda_pct is not None:
+            results = [r for r in results if r.get('ebitda_margin_0') is not None and r['ebitda_margin_0'] <= max_ebitda_pct]
+        if min_ebitda is not None:
+            results = [r for r in results if r.get('ebitda_0') is not None and r['ebitda_0'] >= min_ebitda]
+        if max_ebitda is not None:
+            results = [r for r in results if r.get('ebitda_0') is not None and r['ebitda_0'] <= max_ebitda]
     else:
         # Solo filtri strutturati
         results = search_structured(
