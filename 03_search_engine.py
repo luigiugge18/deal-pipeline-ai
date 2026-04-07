@@ -71,13 +71,14 @@ def search_structured(
     min_ricavi: int | None = None,
     max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
+    max_ebitda_pct: float | None = None,
     solo_interessanti: bool = True,
     limit: int = 20,
 ) -> list[dict]:
     """Ricerca con soli filtri strutturati, ordinata per ricavi desc."""
     sb = _get_supabase()
     q = sb.table('companies').select(
-        'id, ragione_sociale, slug, ateco_codice, regione, provincia, comune, '
+        'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
         'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, last_updated, '
         'note, contatti, next_steps, sheet_row, is_interessante, esclusiva, altro'
     )
@@ -91,6 +92,8 @@ def search_structured(
         q = q.lte('ricavi_0', max_ricavi)
     if min_ebitda_pct is not None:
         q = q.gte('ebitda_margin_0', min_ebitda_pct)
+    if max_ebitda_pct is not None:
+        q = q.lte('ebitda_margin_0', max_ebitda_pct)
     if solo_interessanti:
         q = q.eq('is_interessante', True)
 
@@ -128,6 +131,7 @@ def search(
     min_ricavi: int | None = None,
     max_ricavi: int | None = None,
     min_ebitda_pct: float | None = None,
+    max_ebitda_pct: float | None = None,
     solo_interessanti: bool = True,
     limit: int = 50,
     explain: bool = False,
@@ -148,6 +152,7 @@ def search(
             'min_ricavi': min_ricavi,
             'max_ricavi': max_ricavi,
             'min_ebitda_pct': min_ebitda_pct,
+            'max_ebitda_pct': max_ebitda_pct,
             'filter_ateco': ateco_codici,
             'filter_regione': regione,
             'match_count': limit,
@@ -162,6 +167,7 @@ def search(
             min_ricavi=min_ricavi,
             max_ricavi=max_ricavi,
             min_ebitda_pct=min_ebitda_pct,
+            max_ebitda_pct=max_ebitda_pct,
             solo_interessanti=solo_interessanti,
             limit=limit,
         )
