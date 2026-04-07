@@ -596,13 +596,10 @@ async function loadSheet(slugDirect) {
   lookDiv.innerHTML = '';
   area.innerHTML = `<div class="loading-row"><div class="spinner"></div> Caricamento scheda…</div>`;
 
-  // Se è uno slug (niente spazi, solo lettere/trattini) → carica diretto
-  const isSlug = /^[a-z0-9-]+$/.test(input);
-
-  if (isSlug) {
-    // Caricamento diretto per slug
+  // Se chiamato con uno slug diretto (da codice, non da input utente) → carica diretto
+  if (slugDirect) {
     try {
-      const resp = await fetch(`${API}/company/${encodeURIComponent(input)}`);
+      const resp = await fetch(`${API}/company/${encodeURIComponent(slugDirect)}`);
       if (!resp.ok) throw new Error(resp.status === 404 ? 'Azienda non trovata' : `HTTP ${resp.status}`);
       const c = await resp.json();
       renderSheet(c);
