@@ -272,6 +272,16 @@
         <input type="number" id="q-rev-max" placeholder="es. 10000000" step="100000" />
       </div>
     </div>
+    <div class="form-grid" style="margin-top:.8rem">
+      <div class="form-group">
+        <label>EBITDA minimo (€)</label>
+        <input type="number" id="q-ebitda-abs-min" placeholder="es. 100000" step="50000" />
+      </div>
+      <div class="form-group">
+        <label>EBITDA massimo (€)</label>
+        <input type="number" id="q-ebitda-abs-max" placeholder="es. 2000000" step="50000" />
+      </div>
+    </div>
     <div class="form-grid cols4" style="margin-top:.8rem">
       <div class="form-group">
         <label>EBITDA% minimo</label>
@@ -434,6 +444,8 @@ async function doSearch() {
     max_ricavi:        parseInt(document.getElementById('q-rev-max').value) || null,
     min_ebitda_pct:    parseFloat(document.getElementById('q-ebitda').value) || null,
     max_ebitda_pct:    parseFloat(document.getElementById('q-ebitda-max').value) || null,
+    min_ebitda:        parseInt(document.getElementById('q-ebitda-abs-min').value) || null,
+    max_ebitda:        parseInt(document.getElementById('q-ebitda-abs-max').value) || null,
     solo_interessanti: document.getElementById('q-interessanti').checked,
     limit:             50,
     explain:           document.getElementById('q-explain').checked,
@@ -556,7 +568,7 @@ function buildResultCard(c, rank) {
 }
 
 function clearSearch() {
-  ['q-text','q-rev-min','q-rev-max','q-ebitda','q-ebitda-max','q-geo'].forEach(id => document.getElementById(id).value = '');
+  ['q-text','q-rev-min','q-rev-max','q-ebitda-abs-min','q-ebitda-abs-max','q-ebitda','q-ebitda-max','q-geo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('q-sector').value = '';
   document.getElementById('results-area').innerHTML = '';
 }
@@ -813,6 +825,14 @@ async function exportResults() {
 
     const SOURCE_LABELS = { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' };
 
+    // Helper: per ogni azienda, trova il suffix index per un dato anno
+    function findIdx(c, yr) {
+      for (let i = 0; i <= 4; i++) {
+        if (c[`anno_${i}`] === yr) return i;
+      }
+      return -1;
+    }
+
     const rows = fullData.map(c => {
       const row = {
         'Nome Azienda': c.esclusiva ? '🔒 Azienda in esclusiva' : (c.ragione_sociale || ''),
@@ -821,15 +841,18 @@ async function exportResults() {
         'Fonte':        SOURCE_LABELS[(c.altro || {}).source_sheet] || '—',
         'Regione':      c.regione || '—',
       };
-      // Colonne Rev / EBITDA / Marg% per ogni anno trovato
+      // Tutte le colonne Rev prima, poi tutte EBITDA, poi tutti Marg%
       for (const yr of sortedYears) {
-        let idx = -1;
-        for (let i = 0; i <= 4; i++) {
-          if (c[`anno_${i}`] === yr) { idx = i; break; }
-        }
-        row[`Rev ${yr} (€000)`]    = idx >= 0 ? round100k(c[`ricavi_${idx}`])        : null;
-        row[`EBITDA ${yr} (€000)`] = idx >= 0 ? round100k(c[`ebitda_${idx}`])        : null;
-        row[`Marg% ${yr}`]         = idx >= 0 ? fmtPct(c[`ebitda_margin_${idx}`])    : null;
+        const i = findIdx(c, yr);
+        row[`Rev ${yr} (€000)`] = i >= 0 ? round100k(c[`ricavi_${i}`]) : null;
+      }
+      for (const yr of sortedYears) {
+        const i = findIdx(c, yr);
+        row[`EBITDA ${yr} (€000)`] = i >= 0 ? round100k(c[`ebitda_${i}`]) : null;
+      }
+      for (const yr of sortedYears) {
+        const i = findIdx(c, yr);
+        row[`Marg% ${yr}`] = i >= 0 ? fmtPct(c[`ebitda_margin_${i}`]) : null;
       }
       row['Descrizione'] = buildDesc(c);
       return row;
@@ -837,10 +860,15 @@ async function exportResults() {
 
     const ws = XLSX.utils.json_to_sheet(rows);
 
-    // Larghezze colonne dinamiche
+    // Larghezze colonne dinamiche — 14px per Rev e EBITDA, 10px per Marg%
     const fixedWidths = [40, 16, 28, 18, 14]; // Nome, P.IVA, Sito, Fonte, Regione
-    const yearWidths  = sortedYears.flatMap(() => [14, 14, 10]); // Rev, EBITDA, Marg% per anno
-    const colWidths   = [...fixedWidths, ...yearWidths, 80]; // + Descrizione
+    const colWidths   = [
+      ...fixedWidths,
+      ...sortedYears.map(() => 14),  // Rev
+      ...sortedYears.map(() => 14),  // EBITDA
+      ...sortedYears.map(() => 10),  // Marg%
+      80,                            // Descrizione
+    ];
     ws['!cols'] = colWidths.map(w => ({ wch: w }));
 
     // Stile header (riga 1) — sfondo blu, testo bianco
