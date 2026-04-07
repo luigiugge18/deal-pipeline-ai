@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Deal Pipeline AI</title>
+  <!-- SheetJS per export Excel client-side -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     /* ── Reset & base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -215,6 +217,17 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-row { display: flex; align-items: center; gap: .7rem; color: var(--gray); padding: 1rem 0; }
+
+    /* ── Export button ── */
+    .btn-export {
+      background: var(--green); color: #fff;
+      display: inline-flex; align-items: center; gap: .4rem;
+      border: none; border-radius: 6px; padding: .38rem 1rem;
+      font-size: .82rem; font-weight: 600; cursor: pointer;
+      transition: filter .15s, opacity .15s;
+    }
+    .btn-export:hover  { filter: brightness(1.1); }
+    .btn-export:disabled { opacity: .55; cursor: not-allowed; }
 
     /* ── Empty / Error ── */
     .empty-state { text-align: center; padding: 3rem 1rem; color: var(--gray); }
@@ -434,12 +447,20 @@ async function doSearch() {
   }
 }
 
+// Risultati correnti — aggiornati ad ogni ricerca
+let _currentResults = [];
+let _currentQuery   = '';
+
 function renderResults(data, query) {
   const area = document.getElementById('results-area');
   if (!data.results?.length) {
     area.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun risultato trovato. Prova ad ampliare i criteri.</p></div>`;
+    _currentResults = [];
     return;
   }
+
+  _currentResults = data.results;
+  _currentQuery   = query || '';
 
   const hdr = `
     <div class="results-header">
@@ -448,6 +469,9 @@ function renderResults(data, query) {
         ${query ? `per "<em>${query}</em>"` : ''}
         <span style="color:#aaa;margin-left:.5rem">(${data.query_time}s)</span>
       </div>
+      <button class="btn-export" id="btn-export" onclick="exportResults()">
+        ⬇️ Export Excel
+      </button>
     </div>`;
 
   const cards = data.results.map((c, i) => buildResultCard(c, i + 1)).join('');
@@ -719,6 +743,95 @@ function renderSheet(c) {
 
       <div id="tab-calls" class="tab-pane">${callsHtml}</div>
     </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Export Excel
+// ─────────────────────────────────────────────────────────────────
+function exportResults() {
+  if (!_currentResults.length) return;
+
+  const btn = document.getElementById('btn-export');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generazione…'; }
+
+  try {
+    // Arrotonda al 100k più vicino e mostra in migliaia (€ 000)
+    const round100k = v => v == null ? null : Math.round(v / 100000) * 100;  // in €000
+
+    const fmtPct = v => v == null ? null : parseFloat(v.toFixed(1));
+
+    // Descrizione: usa descrizione_web se disponibile, altrimenti genera da dati
+    function shortDesc(c) {
+      const dw = (c.altro || {}).descrizione_web;
+      if (dw && dw.trim()) {
+        // Prende le prime 2 frasi dalla descrizione web
+        const sentences = dw.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+/g) || [];
+        return sentences.slice(0, 2).join(' ').trim() || dw.slice(0, 200);
+      }
+      // Fallback rule-based
+      const parts = [];
+      if (c.ateco_descrizione) parts.push(`Settore: ${c.ateco_descrizione}.`);
+      else if (c.ateco_codice)  parts.push(`ATECO ${c.ateco_codice}.`);
+      if (c.regione) parts.push(`Con sede in ${c.regione}${c.provincia ? ' (' + c.provincia + ')' : ''}.`);
+      if (c.ricavi_0) parts.push(`Ricavi ${c.anno_0 || ''}: €${Math.round(c.ricavi_0/1000).toLocaleString('it-IT')}k.`);
+      return parts.join(' ') || '—';
+    }
+
+    const rows = _currentResults.map(c => ({
+      'Nome Azienda':    c.esclusiva ? '🔒 Azienda in esclusiva' : (c.ragione_sociale || ''),
+      'P. IVA':          c.partita_iva || '—',
+      'Fonte':           { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' }[(c.altro || {}).source_sheet] || '—',
+      'Regione':         c.regione || '—',
+      [`Rev ${c.anno_0 || '\'24'} (€000)`]: round100k(c.ricavi_0),
+      [`Rev ${c.anno_1 || '\'23'} (€000)`]: round100k(c.ricavi_1),
+      [`Rev ${c.anno_2 || '\'22'} (€000)`]: round100k(c.ricavi_2),
+      [`EBITDA ${c.anno_0 || '\'24'} (€000)`]: round100k(c.ebitda_0),
+      [`EBITDA ${c.anno_1 || '\'23'} (€000)`]: round100k(c.ebitda_1),
+      [`EBITDA ${c.anno_2 || '\'22'} (€000)`]: round100k(c.ebitda_2),
+      [`Marg% ${c.anno_0 || '\'24'}`]: fmtPct(c.ebitda_margin_0),
+      [`Marg% ${c.anno_1 || '\'23'}`]: fmtPct(c.ebitda_margin_1),
+      'Descrizione':     shortDesc(c),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Larghezze colonne
+    const colWidths = [40, 16, 18, 14, 14, 14, 14, 14, 14, 14, 10, 10, 70];
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+    // Stile header (riga 1) — sfondo blu, testo bianco
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!ws[addr]) continue;
+      ws[addr].s = {
+        font:    { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial', sz: 10 },
+        fill:    { patternType: 'solid', fgColor: { rgb: '1A3557' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: { bottom: { style: 'thin', color: { rgb: 'C49A3C' } } },
+      };
+    }
+
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Pipeline Export');
+
+    // Metadata
+    wb.Props = { Title: 'Deal Pipeline Export', Author: 'Deal Pipeline AI' };
+
+    // Nome file
+    const today = new Date().toISOString().slice(0, 10);
+    const queryPart = _currentQuery ? `_${_currentQuery.slice(0,20).replace(/[^a-z0-9]/gi, '_')}` : '';
+    const filename = `pipeline_export_${today}${queryPart}.xlsx`;
+
+    XLSX.writeFile(wb, filename);
+  } catch(e) {
+    alert('Errore export: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Export Excel'; }
+  }
 }
 
 function switchTab(id, btn) {
