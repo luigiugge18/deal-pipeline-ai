@@ -31,18 +31,6 @@ SHEET_ID  = "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48"
 GID       = "1243837551"
 CSV_URL   = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 
-# ── Multi-sheet config ────────────────────────────────────────────────────────
-# Ogni sheet ha: name (chiave usata come source_sheet), sheet_id, gid (None = primo foglio)
-SHEETS: list[dict] = [
-    {"name": "spurghi",           "sheet_id": "1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48", "gid": "1243837551"},
-    {"name": "campagna",          "sheet_id": "1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU", "gid": "0"},
-    # NOTA: usare tab LISTA (gid 1936665626), NON le altre tab del foglio Koinos
-    # La tab LISTA ha valori finanziari come interi (euro interi, NON in milioni)
-    # gid 1970091735 = tab "1" (sbagliata, ha valori in €M)
-    # gid 1936665626 = tab "Lista" (corretta, formato AIDA con euro interi)
-    {"name": "koinos-ingegneria", "sheet_id": "1v9WjjhgzVEUOpu_ldr-lT7BqcB196pjBc2RJMxL8ytg", "gid": "1936665626"},
-]
-
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 OPENAI_KEY   = os.environ["OPENAI_API_KEY"]
@@ -63,41 +51,43 @@ def slugify(text: str) -> str:
     return text.strip("-")[:120]
 
 def to_bigint(val: str) -> int | None:
-    """Converte stringa in intero (valori in euro interi).
-    Gestisce sia formato italiano ("3.213.227") sia US ("669,553"):
-    per i numeri interi (EBITDA, Ricavi) sia punto che virgola sono
-    separatori delle migliaia → si rimuovono entrambi.
+    """
+    Converte una stringa numerica in intero gestendo sia il formato italiano
+    (punto = migliaia, virgola = decimale: 1.234.567,89) che il formato US/AIDA
+    (virgola = migliaia, punto = decimale: 1,234,567.89).
     """
     if not val or val.strip() == "":
         return None
+    val = val.strip().lstrip("-+")  # ignora segno per ora
+    negative = val != val.lstrip("-+") and val.startswith("-")  # ricostruisce segno
+    val = val.strip().replace(" ", "")
     try:
-        cleaned = val.strip().replace(".", "").replace(",", "")
-        return int(float(cleaned))
-    except Exception:
-        return None
-
-def to_bigint_m(val: str) -> int | None:
-    """Converte stringa in intero per valori espressi in milioni di euro.
-    Es: "1,3" → 1.300.000 (virgola = decimale italiano)
-        "23"  → 23.000.000
-        "0,4" → 400.000
-    """
-    if not val or val.strip() == "":
-        return None
-    try:
-        # Sostituisce la virgola decimale italiana con punto
-        cleaned = val.strip().replace(".", "").replace(",", ".")
-        return int(float(cleaned) * 1_000_000)
-    except Exception:
-        return None
-
-def to_percent(val: str) -> float | None:
-    """Converte stringa percentuale in float. Es: "29%" → 29.0, "21,3%" → 21.3"""
-    if not val or val.strip() == "":
-        return None
-    try:
-        cleaned = val.strip().rstrip("%").replace(",", ".")
-        return float(cleaned)
+        has_comma  = "," in val
+        has_period = "." in val
+        if has_comma and has_period:
+            # Entrambi: il separatore che viene DOPO è il decimale
+            if val.rfind(".") > val.rfind(","):
+                # US format: 1,234,567.89 → rimuovi virgole
+                clean = val.replace(",", "")
+            else:
+                # IT format: 1.234.567,89 → rimuovi punti, virgola→punto
+                clean = val.replace(".", "").replace(",", ".")
+        elif has_comma:
+            # Solo virgola: se tutti i blocchi dopo la prima virgola hanno 3 cifre → migliaia
+            parts = val.split(",")
+            if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
+                clean = val.replace(",", "")   # US thousands separator
+            else:
+                clean = val.replace(",", ".")  # decimale
+        else:
+            # Solo punti o nessuno
+            parts = val.split(".")
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[-1]) == 3):
+                clean = val.replace(".", "")   # IT thousands separator
+            else:
+                clean = val                    # decimale o intero
+        result = int(float(clean))
+        return -result if negative else result
     except Exception:
         return None
 
@@ -120,31 +110,24 @@ def to_date(val: str) -> str | None:
     return None
 
 def build_embedding_text(row: dict) -> str:
-    """Costruisce il testo per l'embedding includendo tutti i campi utili."""
-    parts = []
-
-    # Anagrafica
-    for field in ("ragione_sociale", "ateco_codice", "regione", "provincia", "comune", "website",
-                  "telefono", "azionisti", "csh_nome", "dm_nome", "note", "next_steps", "contatti"):
-        val = row.get(field)
-        if val and str(val).strip():
-            parts.append(str(val).strip())
-
-    # Financials (come contesto descrittivo)
+    parts = [
+        row.get("ragione_sociale", ""),
+        f"ATECO {row.get('ateco_codice', '')}",
+        f"Regione: {row.get('regione', '')}",
+        f"Provincia: {row.get('provincia', '')}",
+        f"Comune: {row.get('comune', '')}",
+    ]
     if row.get("ricavi_0"):
-        parts.append(f"Ricavi {row.get('anno_0', '')}: {row['ricavi_0']:,} EUR")
+        parts.append(f"Ricavi: {row['ricavi_0']:,} EUR")
     if row.get("ebitda_0"):
-        parts.append(f"EBITDA {row.get('anno_0', '')}: {row['ebitda_0']:,} EUR")
+        parts.append(f"EBITDA: {row['ebitda_0']:,} EUR")
     if row.get("ebitda_margin_0"):
         parts.append(f"EBITDA margin: {row['ebitda_margin_0']}%")
-
-    # Tutto il contenuto di 'altro' (descrizioni, business, tier, ecc.)
-    altro = row.get("altro") or {}
-    for key, val in altro.items():
-        if val and str(val).strip() and key.lower() not in ("tier",):
-            parts.append(f"{key}: {str(val).strip()}")
-
-    return " | ".join(p for p in parts if p and p.strip())
+    # Includi descrizione_web se disponibile in altro
+    desc = (row.get("altro") or {}).get("descrizione_web", "")
+    if desc:
+        parts.append(desc)
+    return " | ".join(p for p in parts if p.strip() and p.strip() not in ["ATECO ", "Regione: ", "Provincia: ", "Comune: "])
 
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     resp = openai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
@@ -158,7 +141,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
 # Canonical column name → list of accepted variants (lowercase)
 KNOWN_COLS: dict[str, list[str]] = {
     "ragione_sociale":    ["ragione sociale", "ragione soc", "nome azienda", "company"],
-    "interesse":          ["interesse a vendere", "interesse vendere", "interesse", "potential sell-side", "potential sell"],
+    "interesse":          ["interesse a vendere", "interesse vendere", "interesse"],
     "note":               ["note", "notes", "annotazioni"],
     "contatti":           ["contatti", "contatto", "contacts"],
     "next_steps":         ["next steps", "next step", "prossimi passi", "azioni"],
@@ -187,12 +170,11 @@ def _is_ebitda(h: str) -> bool:
 
 def _is_margin(h: str) -> bool:
     hl = h.lower()
-    return ("ebitda" in hl and ("%" in hl or "vendite" in hl)) or "margine" in hl or (
-        "margin" in hl and "ebitda" not in hl)
+    return ("ebitda" in hl and ("%" in hl or "vendite" in hl)) or "margine" in hl
 
 def _is_ricavi(h: str) -> bool:
     hl = h.lower()
-    return ("ricavi" in hl or "sales" in hl or "fatturato" in hl) and "ebitda" not in hl and "margin" not in hl
+    return "ricavi" in hl and "ebitda" not in hl
 
 
 def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], dict[str, dict[int, int]]]:
@@ -206,20 +188,21 @@ def detect_columns(header: list[str]) -> tuple[dict[str, int], dict[int, str], d
     field_map: dict[str, int] = {}
     claimed: set[int] = set()
 
-    # ── 1. Financial columns (by year keyword, or default year if no year in header) ───
+    # ── 1. Financial columns (by year keyword) ────────────────────────────────
     fin_map: dict[str, dict[int, int]] = {"ebitda": {}, "margin": {}, "ricavi": {}}
-    DEFAULT_FIN_YEAR = 2024  # usato quando la colonna non contiene un anno esplicito
     for i, h in enumerate(header):
         ym = YEAR_RE.search(h)
-        year = int(ym.group(1)) if ym else None
+        if not ym:
+            continue
+        year = int(ym.group(1))
         if _is_ebitda(h):
-            fin_map["ebitda"][year or DEFAULT_FIN_YEAR] = i
+            fin_map["ebitda"][year] = i
             claimed.add(i)
         elif _is_margin(h):
-            fin_map["margin"][year or DEFAULT_FIN_YEAR] = i
+            fin_map["margin"][year] = i
             claimed.add(i)
         elif _is_ricavi(h):
-            fin_map["ricavi"][year or DEFAULT_FIN_YEAR] = i
+            fin_map["ricavi"][year] = i
             claimed.add(i)
 
     # ── 2. Scalar fields (exact then fuzzy) ───────────────────────────────────
@@ -290,15 +273,14 @@ def _assign_financial_slots(fin_years: dict[int, int], row: list[str],
 
 
 # ── CSV Parsing ───────────────────────────────────────────────────────────────
-def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_url: str | None = None, fin_unit: str = "eur") -> list[dict]:
+def fetch_csv(local_file: str | None = None) -> list[dict]:
     if local_file:
-        log.info(f"Leggendo CSV da file locale: {local_file} (source_sheet={source_sheet})")
+        log.info(f"Leggendo CSV da file locale: {local_file}")
         with open(local_file, "r", encoding="utf-8") as f:
             content = f.read()
     else:
-        url = sheet_url or CSV_URL
-        log.info(f"Scaricando CSV da Google Sheets… (source_sheet={source_sheet})")
-        resp = requests.get(url, timeout=60)
+        log.info("Scaricando CSV da Google Sheets…")
+        resp = requests.get(CSV_URL, timeout=60)
         resp.raise_for_status()
         content = resp.text
 
@@ -363,9 +345,9 @@ def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_u
         except ValueError:
             sheet_row_int = None
 
-        # Interest flag: "1" (AIDA sheet) oppure "Si"/"Sì" (campagna sheet)
+        # Interest flag (column "Interesse a vendere" = 1)
         interesse_raw    = gcell(row, "interesse")
-        is_interessante  = interesse_raw.strip().lower() in ("1", "si", "sì")
+        is_interessante  = (interesse_raw == "1")
         livello_interesse = "chiaro" if is_interessante else None
 
         # Esclusiva flag
@@ -379,37 +361,26 @@ def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_u
                 return None
             return converter(row[idx])
 
-        # Scegli converter in base all'unità del foglio
-        # fin_unit="M": valori in milioni (es. fogli con colonne "Sales (€M)")
-        # fin_unit="eur" (default): valori in euro interi (AIDA, LISTA Koinos, ecc.)
-        _fin_conv  = to_bigint_m if fin_unit == "M" else to_bigint
-        _marg_conv = to_percent  if fin_unit == "M" else to_numeric
-
         # EBITDA slots 0-4 (most recent first)
-        ebitda_vals = [fin_val(fin_map["ebitda"], yr, _fin_conv)   for yr in ebitda_years_sorted] + [None]*(5-len(ebitda_years_sorted))
-        ricavi_vals = [fin_val(fin_map["ricavi"], yr, _fin_conv)   for yr in ricavi_years_sorted] + [None]*(5-len(ricavi_years_sorted))
-        margin_vals = [fin_val(fin_map["margin"], yr, _marg_conv)  for yr in margin_years_sorted] + [None]*(5-len(margin_years_sorted))
+        ebitda_vals = [fin_val(fin_map["ebitda"], yr, to_bigint)   for yr in ebitda_years_sorted] + [None]*(5-len(ebitda_years_sorted))
+        ricavi_vals = [fin_val(fin_map["ricavi"], yr, to_bigint)   for yr in ricavi_years_sorted] + [None]*(5-len(ricavi_years_sorted))
+        margin_vals = [fin_val(fin_map["margin"], yr, to_numeric)  for yr in margin_years_sorted] + [None]*(5-len(margin_years_sorted))
 
         # anno_X = actual calendar year for slot X
         anno_vals = list(canonical_years) + [None]*(5-len(canonical_years))
 
         # ── Altro: unmatched columns ──────────────────────────────────────────
+        # Alcune colonne hanno nomi diversi nei vari fogli ma corrispondono
+        # allo stesso campo interno. Rinominare prima di inserire in altro.
+        _ALTRO_REMAP = {
+            "description": "descrizione_web",  # campagna email
+            "descrizione": "descrizione_web",
+        }
         altro: dict[str, str] = {}
         for col_idx, col_name in unmatched_cols.items():
             if col_idx < len(row) and row[col_idx].strip():
-                altro[col_name] = row[col_idx].strip()
-        # Salva la source sheet per il frontend
-        altro['source_sheet'] = source_sheet
-
-        # Fallback: se "Interesse a vendere" è finito in altro per problemi di parsing,
-        # lo cattura comunque per impostare is_interessante correttamente
-        if not is_interessante:
-            for k, v in altro.items():
-                if "interesse" in k.lower() and "vendere" in k.lower():
-                    if v.strip().lower() in ("1", "si", "sì"):
-                        is_interessante = True
-                        livello_interesse = "chiaro"
-                        break
+                key = _ALTRO_REMAP.get(col_name.lower().strip(), col_name)
+                altro[key] = row[col_idx].strip()
 
         rec = {
             "slug":               slug,
@@ -464,37 +435,37 @@ def fetch_csv(local_file: str | None = None, source_sheet: str = "aida", sheet_u
     return records
 
 
-# Priorità source_sheet: koinos-ingegneria > campagna > spurghi
-_SOURCE_PRIORITY = {"koinos-ingegneria": 3, "campagna": 2, "spurghi": 1}
+# ── Campi protetti in altro (non vengono mai sovrascritti durante l'import) ────
+PROTECTED = {"descrizione_web"}
 
-def _merge_altro(existing: dict | None, new: dict | None) -> dict:
-    """Merge JSONB `altro` preservando le chiavi esistenti non presenti nel nuovo import.
 
-    Regole:
-    - Chiavi esistenti NON presenti nel nuovo → preserve (es. descrizione_web, chiavi scraping)
-    - Chiavi nuove → aggiornano l'esistente
-    - source_sheet → vince il foglio con priorità più alta (koinos > campagna > spurghi)
+def _merge_altro(new_altro: dict | None, existing_altro: dict | None) -> dict | None:
     """
-    base = dict(existing or {})
-    upd  = dict(new or {})
-
-    # Merge: il nuovo aggiorna il base, ma le chiavi "protette" del base sopravvivono
-    PROTECTED = {"descrizione_web"}  # chiavi che NON vanno mai sovrascritte dall'import
-    merged = {**base, **{k: v for k, v in upd.items() if k not in PROTECTED}}
-
-    # source_sheet: vince la priorità più alta
-    old_src = base.get("source_sheet", "spurghi")
-    new_src = upd.get("source_sheet", "spurghi")
-    if _SOURCE_PRIORITY.get(old_src, 0) >= _SOURCE_PRIORITY.get(new_src, 0):
-        merged["source_sheet"] = old_src
-    else:
-        merged["source_sheet"] = new_src
-
-    return merged
+    Unisce new_altro con existing_altro preservando i campi in PROTECTED.
+    I campi protetti vengono mantenuti dal DB esistente; tutti gli altri
+    vengono aggiornati dal nuovo import.
+    """
+    merged = dict(new_altro or {})
+    if existing_altro:
+        for key in PROTECTED:
+            if key in existing_altro:
+                merged[key] = existing_altro[key]   # proteggi il valore esistente
+    return merged if merged else None
 
 
-def _run_import(records: list[dict]) -> tuple[int, int]:
-    """Esegue upsert + embedding su una lista di record. Restituisce (inserted, errors)."""
+def _fetch_existing_altro(slugs: list[str]) -> dict[str, dict]:
+    """Ritorna {slug: altro} per le aziende già presenti nel DB."""
+    if not slugs:
+        return {}
+    res = supabase.table("companies").select("slug,altro").in_("slug", slugs).execute()
+    return {r["slug"]: (r.get("altro") or {}) for r in res.data}
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+def main():
+    import sys
+    local_file = sys.argv[1] if len(sys.argv) > 1 else None
+    records = fetch_csv(local_file)
     total    = len(records)
     inserted = 0
     errors   = 0
@@ -503,6 +474,7 @@ def _run_import(records: list[dict]) -> tuple[int, int]:
         batch = records[start : start + BATCH_SIZE]
         texts = [build_embedding_text(r) for r in batch]
 
+        # Genera embeddings
         try:
             embeddings = get_embeddings(texts)
         except Exception as e:
@@ -518,75 +490,22 @@ def _run_import(records: list[dict]) -> tuple[int, int]:
         for rec, emb in zip(batch, embeddings):
             rec["embedding"] = emb
 
-        batch_ok = 0
+        # ⚠️ Proteggi campi sensibili in altro (es. descrizione_web) ──────────
+        existing = _fetch_existing_altro([r["slug"] for r in batch])
         for rec in batch:
-            try:
-                piva = rec.get("partita_iva")
-                if piva:
-                    existing = supabase.table("companies").select("id, altro").eq("partita_iva", piva).execute()
-                    if existing.data:
-                        # Solo i campi non-None, per non sovrascrivere dati finanziari
-                        # già presenti con null (es. campagna non ha ricavi/EBITDA)
-                        rec_update = {k: v for k, v in rec.items() if v is not None}
-                        # Merge altro: preserva chiavi esistenti (es. descrizione_web)
-                        # e aggiorna con i nuovi valori dello sheet corrente
-                        rec_update["altro"] = _merge_altro(existing.data[0].get("altro"), rec.get("altro"))
-                        supabase.table("companies").update(rec_update).eq("partita_iva", piva).execute()
-                    else:
-                        supabase.table("companies").insert(rec).execute()
-                else:
-                    existing = supabase.table("companies").select("id, altro").ilike(
-                        "ragione_sociale", rec["ragione_sociale"]).execute()
-                    if existing.data:
-                        rec_update = {k: v for k, v in rec.items() if k != "slug"}
-                        rec_update["altro"] = _merge_altro(existing.data[0].get("altro"), rec.get("altro"))
-                        supabase.table("companies").update(rec_update).eq(
-                            "id", existing.data[0]["id"]).execute()
-                    else:
-                        supabase.table("companies").insert(rec).execute()
-                batch_ok += 1
-            except Exception as e:
-                log.warning(f"  Skip '{rec.get('ragione_sociale','?')}': {e}")
-                errors += 1
-        inserted += batch_ok
-        log.info(f"  ✓ {inserted}/{total} inseriti")
+            rec["altro"] = _merge_altro(rec.get("altro"), existing.get(rec["slug"]))
+
+        try:
+            supabase.table("companies").upsert(batch, on_conflict="slug").execute()
+            inserted += len(batch)
+            log.info(f"  ✓ {inserted}/{total} inseriti")
+        except Exception as e:
+            log.error(f"Upsert fallito per batch {start}: {e}")
+            errors += len(batch)
+
         time.sleep(EMBED_DELAY_S)
 
-    return inserted, errors
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-def main():
-    import sys
-    local_file = sys.argv[1] if len(sys.argv) > 1 else None
-
-    if local_file:
-        # Singolo file locale: usa source_sheet dal nome del file (o "aida" di default)
-        fname = os.path.basename(local_file).lower().replace(".csv", "")
-        # Match: controlla se il nome chiave O la prima parola del nome è nel filename
-        def _matches(sheet_name, fname):
-            if sheet_name in fname: return True
-            first_word = sheet_name.split('-')[0]  # es. "koinos" da "koinos-ingegneria"
-            return len(first_word) >= 4 and first_word in fname
-        source = next((s["name"] for s in SHEETS if _matches(s["name"], fname)), "spurghi")
-        records = fetch_csv(local_file, source_sheet=source)
-        inserted, errors = _run_import(records)
-        log.info(f"\n=== {source.upper()} COMPLETATO: {inserted} inseriti, {errors} errori ===")
-    else:
-        # Scarica tutti i sheet configurati con URL
-        total_ins = 0; total_err = 0
-        for sh in SHEETS:
-            if not sh["sheet_id"]:
-                log.info(f"Sheet '{sh['name']}' non configurato (sheet_id mancante) — saltato")
-                continue
-            gid_param = f"&gid={sh['gid']}" if sh["gid"] else ""
-            url = f"https://docs.google.com/spreadsheets/d/{sh['sheet_id']}/export?format=csv{gid_param}"
-            log.info(f"\n{'='*60}\nImport: {sh['name'].upper()}\n{'='*60}")
-            records = fetch_csv(source_sheet=sh["name"], sheet_url=url)
-            ins, err = _run_import(records)
-            total_ins += ins; total_err += err
-            log.info(f"  → {sh['name']}: {ins} inseriti, {err} errori")
-        log.info(f"\n=== TOTALE: {total_ins} inseriti, {total_err} errori ===")
+    log.info(f"\n=== COMPLETATO: {inserted} inseriti, {errors} errori ===")
 
 if __name__ == "__main__":
     main()
