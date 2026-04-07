@@ -67,6 +67,8 @@ class SearchRequest(BaseModel):
     max_ricavi:        Optional[int]        = Field(None,  description='Ricavi massimi (€)')
     min_ebitda_pct:    Optional[float]      = Field(None,  description='EBITDA margin % minimo')
     max_ebitda_pct:    Optional[float]      = Field(None,  description='EBITDA margin % massimo')
+    min_ebitda:        Optional[int]        = Field(None,  description='EBITDA minimo assoluto (€)')
+    max_ebitda:        Optional[int]        = Field(None,  description='EBITDA massimo assoluto (€)')
     solo_interessanti: bool                 = Field(True,  description='Solo aziende interessate/potenzialmente interessate')
     limit:             int                  = Field(50,    ge=1, le=200)
     explain:           bool                 = Field(False, description='Genera spiegazione AI per top 5')
@@ -133,6 +135,8 @@ async def search_endpoint(req: SearchRequest):
             max_ricavi=req.max_ricavi,
             min_ebitda_pct=req.min_ebitda_pct,
             max_ebitda_pct=req.max_ebitda_pct,
+            min_ebitda=req.min_ebitda,
+            max_ebitda=req.max_ebitda,
             solo_interessanti=req.solo_interessanti,
             limit=req.limit,
             explain=req.explain,
