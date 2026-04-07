@@ -74,7 +74,8 @@
     /* ── Form ── */
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
-    @media(max-width:700px){ .form-grid, .form-grid.cols3 { grid-template-columns: 1fr; } }
+    .form-grid.cols4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    @media(max-width:700px){ .form-grid, .form-grid.cols3, .form-grid.cols4 { grid-template-columns: 1fr; } }
     .form-group { display: flex; flex-direction: column; gap: .3rem; }
     .form-group label { font-size: .8rem; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: .4px; }
     .form-group input,
@@ -271,10 +272,14 @@
         <input type="number" id="q-rev-max" placeholder="es. 10000000" step="100000" />
       </div>
     </div>
-    <div class="form-grid cols3" style="margin-top:.8rem">
+    <div class="form-grid cols4" style="margin-top:.8rem">
       <div class="form-group">
         <label>EBITDA% minimo</label>
         <input type="number" id="q-ebitda" placeholder="es. 10" step="1" />
+      </div>
+      <div class="form-group">
+        <label>EBITDA% massimo</label>
+        <input type="number" id="q-ebitda-max" placeholder="es. 40" step="1" />
       </div>
       <div class="form-group">
         <label>Codice ATECO</label>
@@ -428,6 +433,7 @@ async function doSearch() {
     min_ricavi:        parseInt(document.getElementById('q-rev-min').value) || null,
     max_ricavi:        parseInt(document.getElementById('q-rev-max').value) || null,
     min_ebitda_pct:    parseFloat(document.getElementById('q-ebitda').value) || null,
+    max_ebitda_pct:    parseFloat(document.getElementById('q-ebitda-max').value) || null,
     solo_interessanti: document.getElementById('q-interessanti').checked,
     limit:             50,
     explain:           document.getElementById('q-explain').checked,
@@ -550,7 +556,7 @@ function buildResultCard(c, rank) {
 }
 
 function clearSearch() {
-  ['q-text','q-rev-min','q-rev-max','q-ebitda','q-geo'].forEach(id => document.getElementById(id).value = '');
+  ['q-text','q-rev-min','q-rev-max','q-ebitda','q-ebitda-max','q-geo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('q-sector').value = '';
   document.getElementById('results-area').innerHTML = '';
 }
@@ -796,27 +802,45 @@ async function exportResults() {
       return parts.join(' ') || '—';
     }
 
-    const rows = fullData.map(c => ({
-      'Nome Azienda':    c.esclusiva ? '🔒 Azienda in esclusiva' : (c.ragione_sociale || ''),
-      'P. IVA':          c.partita_iva || '—',
-      'Sito Web':        c.website || '—',
-      'Fonte':           { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' }[(c.altro || {}).source_sheet] || '—',
-      'Regione':         c.regione || '—',
-      [`Rev ${c.anno_0 || '\'24'} (€000)`]:    round100k(c.ricavi_0),
-      [`Rev ${c.anno_1 || '\'23'} (€000)`]:    round100k(c.ricavi_1),
-      [`Rev ${c.anno_2 || '\'22'} (€000)`]:    round100k(c.ricavi_2),
-      [`EBITDA ${c.anno_0 || '\'24'} (€000)`]: round100k(c.ebitda_0),
-      [`EBITDA ${c.anno_1 || '\'23'} (€000)`]: round100k(c.ebitda_1),
-      [`EBITDA ${c.anno_2 || '\'22'} (€000)`]: round100k(c.ebitda_2),
-      [`Marg% ${c.anno_0 || '\'24'}`]:          fmtPct(c.ebitda_margin_0),
-      [`Marg% ${c.anno_1 || '\'23'}`]:          fmtPct(c.ebitda_margin_1),
-      'Descrizione':     buildDesc(c),
-    }));
+    // Raccoglie tutti gli anni presenti nei dati (da anno_0..anno_4), ordina desc
+    const allYearsSet = new Set();
+    for (const c of fullData) {
+      for (let i = 0; i <= 4; i++) {
+        if (c[`anno_${i}`] != null) allYearsSet.add(c[`anno_${i}`]);
+      }
+    }
+    const sortedYears = [...allYearsSet].sort((a, b) => b - a);
+
+    const SOURCE_LABELS = { spurghi: 'Spurghi', campagna: 'Campagna Email', 'koinos-ingegneria': 'Koinos Ingegneria' };
+
+    const rows = fullData.map(c => {
+      const row = {
+        'Nome Azienda': c.esclusiva ? '🔒 Azienda in esclusiva' : (c.ragione_sociale || ''),
+        'P. IVA':       c.partita_iva || '—',
+        'Sito Web':     c.website || '—',
+        'Fonte':        SOURCE_LABELS[(c.altro || {}).source_sheet] || '—',
+        'Regione':      c.regione || '—',
+      };
+      // Colonne Rev / EBITDA / Marg% per ogni anno trovato
+      for (const yr of sortedYears) {
+        let idx = -1;
+        for (let i = 0; i <= 4; i++) {
+          if (c[`anno_${i}`] === yr) { idx = i; break; }
+        }
+        row[`Rev ${yr} (€000)`]    = idx >= 0 ? round100k(c[`ricavi_${idx}`])        : null;
+        row[`EBITDA ${yr} (€000)`] = idx >= 0 ? round100k(c[`ebitda_${idx}`])        : null;
+        row[`Marg% ${yr}`]         = idx >= 0 ? fmtPct(c[`ebitda_margin_${idx}`])    : null;
+      }
+      row['Descrizione'] = buildDesc(c);
+      return row;
+    });
 
     const ws = XLSX.utils.json_to_sheet(rows);
 
-    // Larghezze colonne (aggiunta col Sito Web)
-    const colWidths = [40, 16, 28, 18, 14, 14, 14, 14, 14, 14, 14, 10, 10, 80];
+    // Larghezze colonne dinamiche
+    const fixedWidths = [40, 16, 28, 18, 14]; // Nome, P.IVA, Sito, Fonte, Regione
+    const yearWidths  = sortedYears.flatMap(() => [14, 14, 10]); // Rev, EBITDA, Marg% per anno
+    const colWidths   = [...fixedWidths, ...yearWidths, 80]; // + Descrizione
     ws['!cols'] = colWidths.map(w => ({ wch: w }));
 
     // Stile header (riga 1) — sfondo blu, testo bianco
