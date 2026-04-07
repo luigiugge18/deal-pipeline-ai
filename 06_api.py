@@ -66,6 +66,7 @@ class SearchRequest(BaseModel):
     min_ricavi:        Optional[int]        = Field(None,  description='Ricavi minimi (€)')
     max_ricavi:        Optional[int]        = Field(None,  description='Ricavi massimi (€)')
     min_ebitda_pct:    Optional[float]      = Field(None,  description='EBITDA margin % minimo')
+    max_ebitda_pct:    Optional[float]      = Field(None,  description='EBITDA margin % massimo')
     solo_interessanti: bool                 = Field(True,  description='Solo aziende interessate/potenzialmente interessate')
     limit:             int                  = Field(50,    ge=1, le=200)
     explain:           bool                 = Field(False, description='Genera spiegazione AI per top 5')
@@ -74,6 +75,7 @@ class CompanyResult(BaseModel):
     id:              str
     ragione_sociale: str
     slug:            str
+    partita_iva:     Optional[str]  = None
     ateco_codice:    Optional[str]
     regione:         Optional[str]
     provincia:       Optional[str]
@@ -130,6 +132,7 @@ async def search_endpoint(req: SearchRequest):
             min_ricavi=req.min_ricavi,
             max_ricavi=req.max_ricavi,
             min_ebitda_pct=req.min_ebitda_pct,
+            max_ebitda_pct=req.max_ebitda_pct,
             solo_interessanti=req.solo_interessanti,
             limit=req.limit,
             explain=req.explain,
@@ -163,22 +166,27 @@ async def lookup_company(q: str):
 
     q_clean = q.strip()
 
+    FIELDS = (
+        'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
+        'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, is_interessante, livello_interesse, '
+        'note, contatti, next_steps, anno_0'
+    )
+
     # Prima prova: P.IVA esatta (solo cifre)
     if re.fullmatch(r'\d{11}', q_clean):
-        resp = sb.table('companies').select(
-            'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
-            'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, is_interessante, livello_interesse, '
-            'note, contatti, next_steps, anno_0'
-        ).eq('partita_iva', q_clean).execute()
+        resp = sb.table('companies').select(FIELDS).eq('partita_iva', q_clean).execute()
+        results = resp.data or []
     else:
-        # Ricerca per nome (case-insensitive)
-        resp = sb.table('companies').select(
-            'id, ragione_sociale, slug, partita_iva, ateco_codice, regione, provincia, comune, '
-            'ricavi_0, ebitda_0, ebitda_margin_0, website, dm_nome, is_interessante, livello_interesse, '
-            'note, contatti, next_steps, anno_0'
-        ).ilike('ragione_sociale', f'%{q_clean}%').limit(20).execute()
+        # Ricerca per nome (case-insensitive, substring)
+        resp = sb.table('companies').select(FIELDS).ilike('ragione_sociale', f'%{q_clean}%').limit(20).execute()
+        results = resp.data or []
 
-    results = resp.data or []
+        # Fallback fuzzy: inserisce % tra ogni carattere per matchare nomi con punteggiatura
+        # es. "tecnodi" → "t%e%c%n%o%d%i" → trova "TEC.NO.DI. S.R.L."
+        if not results and len(q_clean) >= 4:
+            fuzzy = '%'.join(list(q_clean.lower()))
+            resp2 = sb.table('companies').select(FIELDS).ilike('ragione_sociale', f'%{fuzzy}%').limit(20).execute()
+            results = resp2.data or []
     # Rimuovi embedding se presente
     for r in results:
         r.pop('embedding', None)
