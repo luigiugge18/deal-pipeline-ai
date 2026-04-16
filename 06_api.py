@@ -39,7 +39,7 @@ from search_engine_module import search, get_company  # noqa: E402  (vedi alias 
 app = FastAPI(
     title='Deal Pipeline AI',
     description='Sistema di matching buyer/seller con ricerca semantica',
-    version='1.0.0',
+    version='1.0.1',
 )
 
 # CORS: in produzione imposta ALLOWED_ORIGINS come variabile d'ambiente
