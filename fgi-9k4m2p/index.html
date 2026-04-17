@@ -821,9 +821,9 @@ async function exportResults() {
     const sortedYears = [...allYearsSet].sort((a, b) => b - a);
 
     const SOURCE_URLS = {
-      'spurghi':           'https://docs.google.com/spreadsheets/d/1BzcKrG1JhuiKhbivMyFBXXmqdVuRui1Qerk4WGNZw48/edit?gid=1243837551',
-      'campagna':          'https://docs.google.com/spreadsheets/d/1sM_qaiclmM8Q_P2HiEe-YWhTyOsEopxkSxgA9Zd7zRU/edit?gid=0',
-      'koinos-ingegneria': 'https://docs.google.com/spreadsheets/d/1v9WjjhgzVEUOpu_ldr-lT7BqcB196pjBc2RJMxL8ytg/edit?gid=1936665626',
+      'spurghi':           'Spurghi',
+      'campagna':          'Campagna Email',
+      'koinos-ingegneria': 'Koinos Ingegneria',
     };
 
     // Helper: per ogni azienda, trova il suffix index per un dato anno
@@ -862,7 +862,7 @@ async function exportResults() {
     const ws = XLSX.utils.json_to_sheet(rows);
 
     // Larghezze colonne dinamiche — 14px per Rev e EBITDA, 10px per Marg%
-    const fixedWidths = [40, 16, 28, 70, 14]; // Nome, P.IVA, Sito, Fonte (URL), Regione
+    const fixedWidths = [40, 16, 28, 20, 14]; // Nome, P.IVA, Sito, Fonte, Regione
     const colWidths   = [
       ...fixedWidths,
       ...sortedYears.map(() => 14),  // Rev
@@ -883,14 +883,6 @@ async function exportResults() {
         alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
         border:    { bottom: { style: 'thin', color: { rgb: 'C49A3C' } } },
       };
-    }
-
-    // Hyperlink sulla colonna Fonte (indice 3) — rende le URL cliccabili in Excel
-    for (let R = 1; R <= rows.length; R++) {
-      const addr = XLSX.utils.encode_cell({ r: R, c: 3 });
-      if (ws[addr] && ws[addr].v && ws[addr].v !== '—') {
-        ws[addr].l = { Target: ws[addr].v };
-      }
     }
 
     // Freeze header row
