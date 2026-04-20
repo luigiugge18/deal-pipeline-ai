@@ -70,7 +70,7 @@ class SearchRequest(BaseModel):
     min_ebitda:        Optional[int]        = Field(None,  description='EBITDA minimo assoluto (€)')
     max_ebitda:        Optional[int]        = Field(None,  description='EBITDA massimo assoluto (€)')
     solo_interessanti: bool                 = Field(True,  description='Solo aziende interessate/potenzialmente interessate')
-    limit:             int                  = Field(50,    ge=1, le=200)
+    limit:             int                  = Field(50,    ge=1, le=500)
     explain:           bool                 = Field(False, description='Genera spiegazione AI per top 5')
 
 class CompanyResult(BaseModel):
