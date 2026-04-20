@@ -447,7 +447,7 @@ async function doSearch() {
     min_ebitda:        parseInt(document.getElementById('q-ebitda-abs-min').value) || null,
     max_ebitda:        parseInt(document.getElementById('q-ebitda-abs-max').value) || null,
     solo_interessanti: document.getElementById('q-interessanti').checked,
-    limit:             150,
+    limit:             500,
     explain:           document.getElementById('q-explain').checked,
   };
 
@@ -468,22 +468,27 @@ async function doSearch() {
 // Risultati correnti — aggiornati ad ogni ricerca
 let _currentResults = [];
 let _currentQuery   = '';
+let _displayedCount = 0;
+const PAGE_SIZE     = 150;
+const LOAD_MORE     = 100;
 
 function renderResults(data, query) {
   const area = document.getElementById('results-area');
   if (!data.results?.length) {
     area.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun risultato trovato. Prova ad ampliare i criteri.</p></div>`;
     _currentResults = [];
+    _displayedCount = 0;
     return;
   }
 
   _currentResults = data.results;
   _currentQuery   = query || '';
+  _displayedCount = Math.min(PAGE_SIZE, data.results.length);
 
   const hdr = `
     <div class="results-header">
       <div class="results-count">
-        <strong>${data.results.length}</strong> risultati trovati
+        <strong id="displayed-count">${_displayedCount}</strong> di <strong>${data.results.length}</strong> risultati
         ${query ? `per "<em>${query}</em>"` : ''}
         <span style="color:#aaa;margin-left:.5rem">(${data.query_time}s)</span>
       </div>
@@ -492,8 +497,38 @@ function renderResults(data, query) {
       </button>
     </div>`;
 
-  const cards = data.results.map((c, i) => buildResultCard(c, i + 1)).join('');
-  area.innerHTML = hdr + cards;
+  const cards = data.results.slice(0, _displayedCount).map((c, i) => buildResultCard(c, i + 1)).join('');
+  area.innerHTML = hdr + `<div id="cards-container">${cards}</div>` + buildLoadMoreBtn();
+}
+
+function buildLoadMoreBtn() {
+  if (_displayedCount >= _currentResults.length) return '';
+  const remaining = _currentResults.length - _displayedCount;
+  const next = Math.min(LOAD_MORE, remaining);
+  return `<div style="text-align:center;margin:1.5rem 0">
+    <button class="btn btn-outline" onclick="loadMore()" style="padding:.6rem 2rem;font-size:.95rem">
+      Carica altri ${next} risultati (${remaining} rimanenti)
+    </button>
+  </div>`;
+}
+
+function loadMore() {
+  const from = _displayedCount;
+  const to   = Math.min(_displayedCount + LOAD_MORE, _currentResults.length);
+  const newCards = _currentResults.slice(from, to).map((c, i) => buildResultCard(c, from + i + 1)).join('');
+
+  // Appendi le nuove card e aggiorna il pulsante
+  document.getElementById('cards-container').insertAdjacentHTML('beforeend', newCards);
+  _displayedCount = to;
+
+  // Aggiorna contatore e pulsante
+  const countEl = document.getElementById('displayed-count');
+  if (countEl) countEl.textContent = _displayedCount;
+
+  // Sostituisci il pulsante "Carica altri"
+  const btnArea = document.querySelector('#cards-container + div');
+  if (btnArea) btnArea.outerHTML = buildLoadMoreBtn();
+  else document.getElementById('cards-container').insertAdjacentHTML('afterend', buildLoadMoreBtn());
 }
 
 function buildResultCard(c, rank) {
